@@ -1,0 +1,5 @@
+{
+  "name": "Kuaipi ERP Agent",
+  "description": "A conversational ERP agent prototype for wholesale ordering in a WeChat Mini Program style.",
+  "requestFramePermissions": []
+}
