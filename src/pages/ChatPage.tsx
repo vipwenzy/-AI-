@@ -401,8 +401,57 @@ export default function ChatPage() {
     setTimeout(() => {
       setIsProcessing(false);
       
-      if (text.includes('可乐') || text.includes('薯片') || text.includes('补货')) {
-        const draftMsg: Message = {
+      let replyMsg: Message;
+
+      if (text.includes('本周爆款') || text.includes('卖得好')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'order-draft',
+          content: '为您推荐本周销量最高的商品，已为您生成采购清单：',
+          timestamp: new Date(),
+          data: {
+            items: [
+              { productId: '1', quantity: 50, confirmed: false }, // Coke
+              { productId: '3', quantity: 30, confirmed: false }, // Chips
+              { productId: '5', quantity: 100, confirmed: false }, // Water
+            ],
+            isConfirmed: false
+          }
+        };
+      } else if (text.includes('限时特惠') || text.includes('优惠')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'order-draft',
+          content: '这几款商品正在做限时促销，进货价非常划算：',
+          timestamp: new Date(),
+          data: {
+            items: [
+              { productId: '2', quantity: 20, confirmed: false }, // Pepsi
+              { productId: '6', quantity: 10, confirmed: false }, // Oreo
+            ],
+            isConfirmed: false
+          }
+        };
+      } else if (text.includes('常购清单') || text.includes('以前的单子')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'order-draft',
+          content: '好的，这是您经常采购的商品组合，请确认：',
+          timestamp: new Date(),
+          data: {
+            items: [
+              { productId: '1', quantity: 20, confirmed: false },
+              { productId: '5', quantity: 20, confirmed: false },
+              { productId: '3', quantity: 10, confirmed: false },
+            ],
+            isConfirmed: false
+          }
+        };
+      } else if (text.includes('可乐') || text.includes('薯片') || text.includes('补货')) {
+        replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
           type: 'order-draft',
@@ -415,36 +464,18 @@ export default function ChatPage() {
             isConfirmed: false
           }
         };
-        updateMessages(prev => [...prev, draftMsg]);
-      } else if (text.includes('预测') || text.includes('销售')) {
-        const replyMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'agent',
-          type: 'text',
-          content: "根据历史数据分析，预计下周饮料类销量将增长 15%。建议提前储备「康师傅冰红茶」和「百事可乐」。",
-          timestamp: new Date()
-        };
-        updateMessages(prev => [...prev, replyMsg]);
-      } else if (text.includes('新品') || text.includes('推荐')) {
-         const replyMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'agent',
-          type: 'text',
-          content: "本周热销新品推荐：\n1. 卫龙魔芋爽 (香辣味)\n2. 农夫山泉茶π (蜜桃乌龙)\n\n是否需要加入采购单？",
-          timestamp: new Date()
-        };
-        updateMessages(prev => [...prev, replyMsg]);
       } else {
-        const replyMsg: Message = {
+        replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
           type: 'text',
           content: "收到。AI 正在检索商品库...",
           timestamp: new Date()
         };
-        updateMessages(prev => [...prev, replyMsg]);
       }
-    }, 1500);
+      
+      updateMessages(prev => [...prev, replyMsg]);
+    }, 1000);
   };
 
   const handleVoiceInput = () => {
@@ -522,18 +553,13 @@ export default function ChatPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <button className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-              <ShoppingCart size={20} />
-            </button>
-            <CartBadge />
-          </div>
           <button 
             onClick={createNewChat} 
-            className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+            className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
             title="新建对话"
           >
-            <PlusCircle size={20} />
+            <PlusCircle size={14} />
+            新对话
           </button>
           <button 
             onClick={() => setShowHistory(!showHistory)} 
@@ -551,43 +577,52 @@ export default function ChatPage() {
       {/* History Sidebar / Overlay */}
       <AnimatePresence>
         {showHistory && (
-          <motion.div 
-            initial={{ opacity: 0, x: "100%" }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute inset-y-0 right-0 w-64 bg-white shadow-2xl z-30 border-l border-gray-100 pt-16"
-          >
-            <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-              <h3 className="font-bold text-gray-900">历史对话</h3>
-            </div>
-            <div className="overflow-y-auto h-full pb-20">
-              {sessions.map(session => (
-                <button
-                  key={session.id}
-                  onClick={() => {
-                    setActiveSessionId(session.id);
-                    setShowHistory(false);
-                  }}
-                  className={cn(
-                    "w-full p-4 text-left border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3",
-                    activeSessionId === session.id ? "bg-blue-50/50" : ""
-                  )}
-                >
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                    activeSessionId === session.id ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"
-                  )}>
-                    <MessageSquare size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm text-gray-900 truncate">{session.title}</div>
-                    <div className="text-xs text-gray-400 mt-1">{session.date.toLocaleDateString()}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </motion.div>
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowHistory(false)}
+              className="absolute inset-0 bg-black/20 z-20 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, x: "100%" }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute inset-y-0 right-0 w-64 bg-white shadow-2xl z-30 border-l border-gray-100 pt-16"
+            >
+              <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+                <h3 className="font-bold text-gray-900">历史对话</h3>
+              </div>
+              <div className="overflow-y-auto h-full pb-20">
+                {sessions.map(session => (
+                  <button
+                    key={session.id}
+                    onClick={() => {
+                      setActiveSessionId(session.id);
+                      setShowHistory(false);
+                    }}
+                    className={cn(
+                      "w-full p-4 text-left border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3",
+                      activeSessionId === session.id ? "bg-blue-50/50" : ""
+                    )}
+                  >
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                      activeSessionId === session.id ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"
+                    )}>
+                      <MessageSquare size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-gray-900 truncate">{session.title}</div>
+                      <div className="text-xs text-gray-400 mt-1">{session.date.toLocaleDateString()}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
