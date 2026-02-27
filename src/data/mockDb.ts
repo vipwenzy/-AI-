@@ -107,6 +107,33 @@ export const MOCK_PRODUCTS: Product[] = [
     image: 'https://images.unsplash.com/photo-1599643478518-17488fbbcd75?w=300&q=80',
     category: '钻石',
     inventory: 50
+  },
+  {
+    id: '12',
+    name: '雪碧 330ml 罐装',
+    price: 42.00,
+    unit: '箱 (24)',
+    image: 'https://images.unsplash.com/photo-1625772299848-391b6a87d7b3?w=300&q=80',
+    category: '饮料',
+    inventory: 0 // Out of stock scenario
+  },
+  {
+    id: '13',
+    name: '红牛维生素功能饮料 250ml',
+    price: 115.00,
+    unit: '箱 (24)',
+    image: 'https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=300&q=80',
+    category: '饮料',
+    inventory: 5 // Low stock scenario
+  },
+  {
+    id: '14',
+    name: '怡宝纯净水 555ml',
+    price: 26.00,
+    unit: '箱 (24)',
+    image: 'https://images.unsplash.com/photo-1523362628745-0c100150b504?w=300&q=80',
+    category: '饮料',
+    inventory: 800
   }
 ];
 
@@ -120,7 +147,7 @@ export interface Message {
   id: string;
   role: 'user' | 'agent' | 'system';
   content?: string;
-  type: 'text' | 'audio' | 'order-draft' | 'order-confirmed';
+  type: 'text' | 'audio' | 'order-draft' | 'order-confirmed' | 'order-image';
   data?: any; // For order drafts etc
   timestamp: Date;
 }

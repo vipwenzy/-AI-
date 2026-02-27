@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Check, X, Sparkles, RefreshCw, ArrowRight, Minus, Plus, ChevronDown, MoreHorizontal, Search, Bell, Zap, BarChart3, Box, Trash2, PlusCircle, History, MessageSquare, Camera, ScanLine, PenTool, ShoppingCart, Gift } from 'lucide-react';
+import { Mic, Send, Check, X, Sparkles, RefreshCw, ArrowRight, Minus, Plus, ChevronDown, MoreHorizontal, Search, Bell, Zap, BarChart3, Box, Trash2, PlusCircle, History, MessageSquare, Camera, ScanLine, PenTool, ShoppingCart, Gift, AlertCircle, Share2 } from 'lucide-react';
 import { MOCK_PRODUCTS, Product, Message, OrderItem } from '../data/mockDb';
 import { cn } from '../lib/utils';
 import { useCart } from '../context/CartContext';
@@ -231,7 +231,63 @@ const OrderDraftCard = ({
   );
 };
 
-const INITIAL_MESSAGE = '李老板下午好，我是广州兴盛批发部的ai开单助手，\n您可以说话（按钮），\n也可以拍订单（按钮），\n还能拍照货品说数量（按钮）\n\n我都马上把单开出来，快来试试吧';
+const OrderImageCard = ({ items, orderNo }: { items: OrderItem[], orderNo: string }) => {
+  const total = items.reduce((sum, item) => {
+    const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+    return sum + (product?.price || 0) * item.quantity;
+  }, 0);
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden w-64">
+      <div className="bg-gradient-to-r from-orange-500 to-red-500 p-4 text-white">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="font-bold text-lg">订货单</h3>
+            <p className="text-xs opacity-80 mt-0.5">{orderNo}</p>
+          </div>
+          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+            <Check size={16} className="text-white" />
+          </div>
+        </div>
+      </div>
+      
+      <div className="p-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-gray-50/50">
+        <div className="space-y-3 mb-4">
+          {items.map((item, index) => {
+            const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+            if (!product) return null;
+            return (
+              <div key={index} className="flex justify-between items-start text-sm">
+                <div className="flex-1 pr-2">
+                  <div className="font-medium text-gray-900 truncate">{product.name}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">¥{product.price} × {item.quantity} {product.unit}</div>
+                </div>
+                <div className="font-mono font-medium text-gray-900">
+                  ¥{(product.price * item.quantity).toFixed(2)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        <div className="border-t border-dashed border-gray-300 pt-3 flex justify-between items-end">
+          <span className="text-xs text-gray-500">合计总额</span>
+          <span className="text-lg font-bold text-orange-600 font-mono">
+            <span className="text-xs mr-0.5">¥</span>{total.toFixed(2)}
+          </span>
+        </div>
+      </div>
+      
+      <div className="p-3 bg-white border-t border-gray-100 flex justify-center">
+        <button className="flex items-center gap-1.5 text-blue-600 text-xs font-medium hover:text-blue-700 transition-colors">
+          <Share2 size={14} /> 转发给客户/老板
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const INITIAL_MESSAGE = '李老板下午好，我是广州兴盛批发部的 AI 开单助手！\n\n您可以这样使用我：\n🎤 按住底部麦克风，直接说："来50箱可乐"\n📸 点击左下角相机，拍下您的手写缺货单\n⌨️ 在下方输入框打字："查一下昨天的订单"\n\n请问今天需要点什么？您可以直接点击下方建议，或对我说：';
 
 export default function ChatPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([
@@ -245,7 +301,10 @@ export default function ChatPage() {
           role: 'agent',
           type: 'text',
           content: INITIAL_MESSAGE,
-          timestamp: new Date()
+          timestamp: new Date(),
+          data: {
+            suggestions: ['来50箱可乐和20盒薯片', '最近哪些货卖得好？', '我昨天的订单发货了吗？']
+          }
         }
       ]
     }
@@ -368,7 +427,10 @@ export default function ChatPage() {
         role: 'agent',
         type: 'text',
         content: INITIAL_MESSAGE,
-        timestamp: new Date()
+        timestamp: new Date(),
+        data: {
+          suggestions: ['来50箱可乐和20盒薯片', '最近哪些货卖得好？', '我昨天的订单发货了吗？']
+        }
       }]
     };
     setSessions(prev => [newSession, ...prev]);
@@ -450,6 +512,43 @@ export default function ChatPage() {
             isConfirmed: false
           }
         };
+      } else if (text.includes('雪碧')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'text',
+          content: '抱歉，【雪碧 330ml 罐装】当前已售罄。是否为您替换为【可口可乐】或【七喜】？',
+          timestamp: new Date(),
+          data: {
+            suggestions: ['替换为可口可乐', '替换为七喜', '到货提醒我']
+          }
+        };
+      } else if (text.includes('红牛') && (text.includes('10') || text.includes('十'))) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'order-draft',
+          content: '【红牛维生素饮料】库存不足，已为您调整为最大可售数量（5箱）。',
+          timestamp: new Date(),
+          data: {
+            items: [
+              { productId: '13', quantity: 5, confirmed: false }
+            ],
+            isConfirmed: false,
+            warning: '红牛库存仅剩 5 箱，已自动调整数量。'
+          }
+        };
+      } else if (text === '来点水' || text === '水' || text.includes('买水')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'text',
+          content: '店里有多种饮用水，请问您需要哪一款？',
+          timestamp: new Date(),
+          data: {
+            suggestions: ['农夫山泉', '百岁山', '怡宝', '随便来5箱最畅销的']
+          }
+        };
       } else if (text.includes('可乐') || text.includes('薯片') || text.includes('补货')) {
         replyMsg = {
           id: (Date.now() + 1).toString(),
@@ -463,6 +562,64 @@ export default function ChatPage() {
             ],
             isConfirmed: false
           }
+        };
+      } else if (text.includes('替换为可口可乐')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'order-draft',
+          content: '好的，已为您替换为可口可乐。',
+          timestamp: new Date(),
+          data: {
+            items: [
+              { productId: '1', quantity: 10, confirmed: false }
+            ],
+            isConfirmed: false
+          }
+        };
+      } else if (text.includes('随便来5箱最畅销的')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'order-draft',
+          content: '为您挑选了销量最好的农夫山泉，请确认：',
+          timestamp: new Date(),
+          data: {
+            items: [
+              { productId: '5', quantity: 5, confirmed: false }
+            ],
+            isConfirmed: false
+          }
+        };
+      } else if (text.includes('催单') || text.includes('发货') || text.includes('还没到')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'text',
+          content: '帮您查了一下，您最近的订单 SO-20240225-001 已经在打包了，预计今天下午发货。需要帮您联系仓库加急吗？',
+          timestamp: new Date(),
+          data: {
+            suggestions: ['帮我加急', '不用了，正常发就行', '查看物流']
+          }
+        };
+      } else if (text.includes('退货') || text.includes('坏了') || text.includes('碎了')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'text',
+          content: '非常抱歉给您带来不便！请您拍一张破损商品的照片发给我，我马上为您处理退款或补发。',
+          timestamp: new Date(),
+          data: {
+            suggestions: ['拍照上传', '联系人工客服']
+          }
+        };
+      } else if (text.includes('帮我加急')) {
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'text',
+          content: '好的，已经为您标记加急！仓库会优先处理您的订单，请留意后续的物流通知。',
+          timestamp: new Date()
         };
       } else {
         replyMsg = {
@@ -510,8 +667,10 @@ export default function ChatPage() {
   };
 
   const confirmOrder = (msgId: string) => {
+    let confirmedItems: OrderItem[] = [];
     updateMessages(prev => prev.map(msg => {
       if (msg.id === msgId) {
+        confirmedItems = msg.data.items;
         return { ...msg, data: { ...msg.data, isConfirmed: true } };
       }
       return msg;
@@ -522,10 +681,22 @@ export default function ChatPage() {
         id: Date.now().toString(),
         role: 'agent',
         type: 'text',
-        content: "订单 SO-20240225-001 已确认。\n智能调度系统已安排优先发货。",
+        content: "订单 SO-20240225-001 已确认。\n智能调度系统已安排优先发货。这是您的订货单，可以长按转发给客户或老板：",
         timestamp: new Date()
       };
-      updateMessages(prev => [...prev, confirmMsg]);
+      
+      const imageMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'agent',
+        type: 'order-image',
+        timestamp: new Date(),
+        data: {
+          items: confirmedItems,
+          orderNo: 'SO-20240225-001'
+        }
+      };
+      
+      updateMessages(prev => [...prev, confirmMsg, imageMsg]);
     }, 600);
   };
 
@@ -693,6 +864,34 @@ export default function ChatPage() {
                   isConfirmed={msg.data.isConfirmed}
                 />
               )}
+
+              {msg.type === 'order-image' && msg.data && (
+                <OrderImageCard 
+                  items={msg.data.items} 
+                  orderNo={msg.data.orderNo} 
+                />
+              )}
+
+              {msg.data?.warning && (
+                <div className="flex items-start gap-1.5 mt-2 bg-orange-50 text-orange-600 p-2.5 rounded-xl text-xs border border-orange-100 shadow-sm max-w-xs">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{msg.data.warning}</span>
+                </div>
+              )}
+
+              {msg.data?.suggestions && (
+                <div className="flex flex-wrap gap-2 mt-2 max-w-xs">
+                  {msg.data.suggestions.map((s: string) => (
+                    <button 
+                      key={s}
+                      onClick={() => handleSend(s)} 
+                      className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full border border-blue-100 hover:bg-blue-100 hover:border-blue-200 transition-colors active:scale-95 shadow-sm font-medium"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
               
               <div className={cn(
                 "text-[10px] text-gray-400 px-1 font-medium tracking-wide",
@@ -836,11 +1035,17 @@ export default function ChatPage() {
                {/* Camera Viewfinder Simulation */}
                <img src="https://images.unsplash.com/photo-1550989460-0adf9ea622e2?q=80&w=600&auto=format&fit=crop" className="w-full h-full object-cover opacity-50" />
                <div className="absolute inset-0 flex items-center justify-center">
-                 <div className="w-64 h-64 border-2 border-white/50 rounded-3xl relative">
+                 <div className="w-64 h-64 border-2 border-white/50 rounded-3xl relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-white rounded-tl-xl"></div>
                     <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-white rounded-tr-xl"></div>
                     <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-white rounded-bl-xl"></div>
                     <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-white rounded-br-xl"></div>
+                    {/* Scanning Line */}
+                    <motion.div 
+                      animate={{ y: [0, 256, 0] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                      className="absolute left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]"
+                    />
                  </div>
                </div>
                <button 
@@ -859,7 +1064,7 @@ export default function ChatPage() {
                  <div className="w-12 h-12 rounded-full bg-gray-800"></div>
                  <button 
                    onClick={() => handleCameraAction('handwritten')}
-                   className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center"
+                   className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center active:scale-95 transition-transform"
                  >
                    <div className="w-16 h-16 bg-white rounded-full"></div>
                  </button>

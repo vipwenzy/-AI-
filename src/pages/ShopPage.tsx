@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Search, ShoppingCart, Plus, Minus, MapPin, Phone, Share2, MoreHorizontal, Grid, ListFilter } from 'lucide-react';
+import { Search, ShoppingCart, Plus, Minus, MapPin, Phone, Share2, MoreHorizontal, Grid, ListFilter, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCart } from '../context/CartContext';
-import { MOCK_PRODUCTS } from '../data/mockDb';
+import { MOCK_PRODUCTS, Product } from '../data/mockDb';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function ShopPage() {
   const [activeCategory, setActiveCategory] = useState('全部');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const { addToCart, updateQuantity, items: cartItems } = useCart();
 
   const categories = ['全部', '买过', '推荐', '铜饰品', '空托', '足金', 'K金', '钻石'];
@@ -106,7 +108,7 @@ export default function ShopPage() {
           {filteredProducts.map(product => {
             const qty = getQuantity(product.id);
             return (
-              <div key={product.id} className="flex gap-3">
+              <div key={product.id} className="flex gap-3" onClick={() => setSelectedProduct(product)}>
                 <div className="w-24 h-24 bg-gray-50 rounded-lg overflow-hidden shrink-0 relative border border-gray-100">
                   <img src={product.image} className="w-full h-full object-cover mix-blend-multiply" />
                 </div>
@@ -124,7 +126,7 @@ export default function ShopPage() {
                     
                     {qty === 0 ? (
                       <button 
-                        onClick={() => addToCart(product)}
+                        onClick={(e) => { e.stopPropagation(); addToCart(product); }}
                         className="w-6 h-6 bg-orange-500 rounded text-white flex items-center justify-center active:scale-90 transition-transform"
                       >
                         <Plus size={16} />
@@ -132,14 +134,14 @@ export default function ShopPage() {
                     ) : (
                       <div className="flex items-center gap-2">
                         <button 
-                          onClick={() => updateQuantity(product.id, -1)}
+                          onClick={(e) => { e.stopPropagation(); updateQuantity(product.id, -1); }}
                           className="w-6 h-6 border border-gray-200 rounded flex items-center justify-center text-gray-400 active:scale-90 transition-transform"
                         >
                           <Minus size={14} />
                         </button>
                         <span className="text-sm font-medium w-4 text-center">{qty}</span>
                         <button 
-                          onClick={() => addToCart(product)}
+                          onClick={(e) => { e.stopPropagation(); addToCart(product); }}
                           className="w-6 h-6 bg-orange-500 rounded text-white flex items-center justify-center active:scale-90 transition-transform"
                         >
                           <Plus size={16} />
@@ -156,6 +158,100 @@ export default function ShopPage() {
           <div className="h-12"></div>
         </div>
       </div>
+
+      {/* Product Detail Modal */}
+      <AnimatePresence>
+        {selectedProduct && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedProduct(null)}
+              className="absolute inset-0 bg-black/40 z-40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: "100%" }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl z-50 flex flex-col max-h-[85vh] overflow-hidden shadow-2xl"
+            >
+              <div className="relative w-full aspect-square bg-gray-50 shrink-0">
+                <img src={selectedProduct.image} className="w-full h-full object-cover mix-blend-multiply" />
+                <button 
+                  onClick={() => setSelectedProduct(null)}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/20 text-white flex items-center justify-center backdrop-blur-md"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="p-5 flex-1 overflow-y-auto pb-24">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="text-2xl font-bold text-orange-600 font-mono">
+                    <span className="text-sm mr-0.5">¥</span>{selectedProduct.price}
+                    <span className="text-sm text-gray-400 font-normal ml-1">/{selectedProduct.unit}</span>
+                  </div>
+                  <div className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    库存 {selectedProduct.inventory}
+                  </div>
+                </div>
+                
+                <h2 className="text-lg font-bold text-gray-900 mb-2 leading-snug">{selectedProduct.name}</h2>
+                <div className="text-sm text-gray-500 mb-6">商品编码: {selectedProduct.id}</div>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between py-3 border-t border-gray-100">
+                    <span className="text-gray-500 text-sm">发货地</span>
+                    <span className="text-gray-900 text-sm font-medium">广东广州</span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 border-t border-gray-100">
+                    <span className="text-gray-500 text-sm">服务</span>
+                    <span className="text-gray-900 text-sm font-medium">48小时发货 · 破损包赔</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Action Bar */}
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex items-center gap-3 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+                <button className="w-12 h-12 rounded-xl border border-gray-200 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50">
+                  <ShoppingCart size={20} />
+                  <span className="text-[10px] mt-0.5">购物车</span>
+                </button>
+                
+                {getQuantity(selectedProduct.id) === 0 ? (
+                  <button 
+                    onClick={() => {
+                      addToCart(selectedProduct);
+                      setSelectedProduct(null); // Optional: close modal after adding
+                    }}
+                    className="flex-1 h-12 bg-orange-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-orange-200 active:scale-[0.98] transition-transform"
+                  >
+                    加入购物车
+                  </button>
+                ) : (
+                  <div className="flex-1 h-12 flex items-center justify-between px-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <button 
+                      onClick={() => updateQuantity(selectedProduct.id, -1)}
+                      className="w-8 h-8 rounded bg-white border border-gray-200 flex items-center justify-center text-gray-600 active:scale-90 transition-transform"
+                    >
+                      <Minus size={18} />
+                    </button>
+                    <span className="font-bold text-lg font-mono">{getQuantity(selectedProduct.id)}</span>
+                    <button 
+                      onClick={() => addToCart(selectedProduct)}
+                      className="w-8 h-8 rounded bg-orange-500 text-white flex items-center justify-center active:scale-90 transition-transform"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
