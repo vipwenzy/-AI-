@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { cn } from '../lib/utils';
-import { MessageCircle, Store, ShoppingCart, User } from 'lucide-react';
-import ChatPage from '../pages/ChatPage';
+import { MessageCircle, Store, ShoppingCart, User, Sparkles } from 'lucide-react';
 import ShopPage from '../pages/ShopPage';
 import CartPage from '../pages/CartPage';
+import ChatPage from '../pages/ChatPage';
 import ProfilePage from '../pages/ProfilePage';
 import { CartProvider, useCart } from '../context/CartContext';
 
@@ -15,14 +15,14 @@ const CartBadge = () => {
   const { totalItems } = useCart();
   if (totalItems === 0) return null;
   return (
-    <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+    <div className="absolute -top-1 -left-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
       {totalItems > 99 ? '99+' : totalItems}
     </div>
   );
 };
 
 export function MobileLayout({ children }: LayoutProps) {
-  const [activeTab, setActiveTab] = useState<'chat' | 'shop' | 'cart' | 'profile'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'shop' | 'cart' | 'profile'>('cart');
 
   return (
     <CartProvider>
@@ -51,20 +51,13 @@ export function MobileLayout({ children }: LayoutProps) {
 
           {/* Main Content Area */}
           <div className="flex-1 overflow-hidden relative bg-white flex flex-col">
-            {activeTab === 'chat' && <ChatPage />}
             {activeTab === 'shop' && <ShopPage />}
-            {activeTab === 'cart' && <CartPage />}
+            {activeTab === 'chat' && <ChatPage />}
             {activeTab === 'profile' && <ProfilePage />}
           </div>
 
           {/* Bottom Navigation - Glassmorphism Light */}
           <div className="h-[88px] bg-white/90 backdrop-blur-xl border-t border-gray-100 flex justify-around items-start pt-4 px-2 z-50 pb-8 shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.02)]">
-            <NavItem 
-              icon={<MessageCircle size={24} strokeWidth={2.5} />} 
-              label="对话" 
-              active={activeTab === 'chat'} 
-              onClick={() => setActiveTab('chat')}
-            />
             <NavItem 
               icon={<Store size={24} strokeWidth={2.5} />} 
               label="店铺" 
@@ -72,10 +65,17 @@ export function MobileLayout({ children }: LayoutProps) {
               onClick={() => setActiveTab('shop')}
             />
             <NavItem 
-              icon={<ShoppingCart size={24} strokeWidth={2.5} />} 
+              icon={
+                <div className="relative">
+                  <ShoppingCart size={24} strokeWidth={2.5} />
+                  <div className="absolute -top-2 -right-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[9px] font-bold px-1 py-0.5 rounded-full border border-white shadow-sm flex items-center">
+                    <Sparkles size={8} className="mr-0.5" /> AI
+                  </div>
+                </div>
+              } 
               label="购物车" 
-              active={activeTab === 'cart'} 
-              onClick={() => setActiveTab('cart')}
+              active={activeTab === 'chat'} 
+              onClick={() => setActiveTab('chat')}
               badge={<CartBadge />}
             />
             <NavItem 

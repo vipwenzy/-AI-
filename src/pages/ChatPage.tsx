@@ -5,6 +5,8 @@ import { MOCK_PRODUCTS, Product, Message, OrderItem } from '../data/mockDb';
 import { cn } from '../lib/utils';
 import { useCart } from '../context/CartContext';
 
+import CartPage from './CartPage';
+
 // --- Types ---
 interface ChatSession {
   id: string;
@@ -289,7 +291,7 @@ const OrderImageCard = ({ items, orderNo }: { items: OrderItem[], orderNo: strin
 
 const INITIAL_MESSAGE = '李老板下午好，我是广州兴盛批发部的 AI 开单助手！\n\n您可以这样使用我：\n🎤 按住底部麦克风，直接说："来50箱可乐"\n📸 点击左下角相机，拍下您的手写缺货单\n⌨️ 在下方输入框打字："查一下昨天的订单"\n\n请问今天需要点什么？您可以直接点击下方建议，或对我说：';
 
-export default function ChatPage() {
+export default function ChatPage({ isEmbedded, onCollapse }: { isEmbedded?: boolean, onCollapse?: () => void }) {
   const [sessions, setSessions] = useState<ChatSession[]>([
     {
       id: '1',
@@ -313,6 +315,7 @@ export default function ChatPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -330,28 +333,6 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages, isProcessing, activeSessionId]);
 
-  // Sync cart with the latest draft message if it exists
-  useEffect(() => {
-    if (cartItems.length === 0) return;
-
-    const lastMsg = messages[messages.length - 1];
-    const isLastMsgDraft = lastMsg?.type === 'order-draft' && !lastMsg.data.isConfirmed;
-
-    if (isLastMsgDraft) {
-      updateMessages(prev => {
-        const newMsgs = [...prev];
-        newMsgs[newMsgs.length - 1] = {
-          ...newMsgs[newMsgs.length - 1],
-          data: {
-            ...newMsgs[newMsgs.length - 1].data,
-            items: cartItems.map(item => ({ productId: item.productId, quantity: item.quantity, confirmed: false }))
-          }
-        };
-        return newMsgs;
-      });
-    }
-  }, [cartItems]);
-
   const updateMessages = (newMessages: Message[] | ((prev: Message[]) => Message[])) => {
     setSessions(prev => prev.map(session => {
       if (session.id === activeSessionId) {
@@ -362,23 +343,6 @@ export default function ChatPage() {
       }
       return session;
     }));
-  };
-
-  const showDraftMessage = () => {
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.type === 'order-draft' && !lastMsg.data.isConfirmed) return;
-
-    const draftMsg: Message = {
-      id: Date.now().toString(),
-      role: 'agent',
-      type: 'order-draft',
-      timestamp: new Date(),
-      data: {
-        items: cartItems.map(item => ({ productId: item.productId, quantity: item.quantity, confirmed: false })),
-        isConfirmed: false
-      }
-    };
-    updateMessages(prev => [...prev, draftMsg]);
   };
 
   const handleCameraAction = (type: 'handwritten' | 'scan') => {
@@ -408,12 +372,6 @@ export default function ChatPage() {
         timestamp: new Date()
       };
       updateMessages(prev => [...prev, replyMsg]);
-      
-      // We need to call showDraftMessage but we can't easily do it here because state updates are async
-      // But the useEffect on cartItems might handle the update if a draft exists.
-      // If no draft exists, we need to create one.
-      // Let's just set a timeout to ensure cart is updated then show draft
-      setTimeout(() => showDraftMessage(), 100);
     }, 1500);
   };
 
@@ -466,51 +424,47 @@ export default function ChatPage() {
       let replyMsg: Message;
 
       if (text.includes('本周爆款') || text.includes('卖得好')) {
+        const cola = MOCK_PRODUCTS.find(p => p.id === '1');
+        const chips = MOCK_PRODUCTS.find(p => p.id === '3');
+        const water = MOCK_PRODUCTS.find(p => p.id === '5');
+        if (cola) addToCart(cola, 50);
+        if (chips) addToCart(chips, 30);
+        if (water) addToCart(water, 100);
+
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
-          type: 'order-draft',
-          content: '为您推荐本周销量最高的商品，已为您生成采购清单：',
-          timestamp: new Date(),
-          data: {
-            items: [
-              { productId: '1', quantity: 50, confirmed: false }, // Coke
-              { productId: '3', quantity: 30, confirmed: false }, // Chips
-              { productId: '5', quantity: 100, confirmed: false }, // Water
-            ],
-            isConfirmed: false
-          }
+          type: 'text',
+          content: '为您推荐本周销量最高的商品，已为您添加到购物车，请确认！',
+          timestamp: new Date()
         };
       } else if (text.includes('限时特惠') || text.includes('优惠')) {
+        const pepsi = MOCK_PRODUCTS.find(p => p.id === '2');
+        const oreo = MOCK_PRODUCTS.find(p => p.id === '6');
+        if (pepsi) addToCart(pepsi, 20);
+        if (oreo) addToCart(oreo, 10);
+
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
-          type: 'order-draft',
-          content: '这几款商品正在做限时促销，进货价非常划算：',
-          timestamp: new Date(),
-          data: {
-            items: [
-              { productId: '2', quantity: 20, confirmed: false }, // Pepsi
-              { productId: '6', quantity: 10, confirmed: false }, // Oreo
-            ],
-            isConfirmed: false
-          }
+          type: 'text',
+          content: '这几款商品正在做限时促销，进货价非常划算，已为您添加到购物车！',
+          timestamp: new Date()
         };
       } else if (text.includes('常购清单') || text.includes('以前的单子')) {
+        const cola = MOCK_PRODUCTS.find(p => p.id === '1');
+        const water = MOCK_PRODUCTS.find(p => p.id === '5');
+        const chips = MOCK_PRODUCTS.find(p => p.id === '3');
+        if (cola) addToCart(cola, 20);
+        if (water) addToCart(water, 20);
+        if (chips) addToCart(chips, 10);
+
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
-          type: 'order-draft',
-          content: '好的，这是您经常采购的商品组合，请确认：',
-          timestamp: new Date(),
-          data: {
-            items: [
-              { productId: '1', quantity: 20, confirmed: false },
-              { productId: '5', quantity: 20, confirmed: false },
-              { productId: '3', quantity: 10, confirmed: false },
-            ],
-            isConfirmed: false
-          }
+          type: 'text',
+          content: '好的，这是您经常采购的商品组合，已为您全部添加到购物车，请确认！',
+          timestamp: new Date()
         };
       } else if (text.includes('雪碧')) {
         replyMsg = {
@@ -524,19 +478,15 @@ export default function ChatPage() {
           }
         };
       } else if (text.includes('红牛') && (text.includes('10') || text.includes('十'))) {
+        const redbull = MOCK_PRODUCTS.find(p => p.id === '13');
+        if (redbull) addToCart(redbull, 5);
+
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
-          type: 'order-draft',
-          content: '【红牛维生素饮料】库存不足，已为您调整为最大可售数量（5箱）。',
-          timestamp: new Date(),
-          data: {
-            items: [
-              { productId: '13', quantity: 5, confirmed: false }
-            ],
-            isConfirmed: false,
-            warning: '红牛库存仅剩 5 箱，已自动调整数量。'
-          }
+          type: 'text',
+          content: '【红牛维生素饮料】库存不足，已为您将最大可售数量（5箱）添加到购物车。',
+          timestamp: new Date()
         };
       } else if (text === '来点水' || text === '水' || text.includes('买水')) {
         replyMsg = {
@@ -550,46 +500,39 @@ export default function ChatPage() {
           }
         };
       } else if (text.includes('可乐') || text.includes('薯片') || text.includes('补货')) {
+        const cola = MOCK_PRODUCTS.find(p => p.id === '1');
+        const chips = MOCK_PRODUCTS.find(p => p.id === '3');
+        if (cola) addToCart(cola, 50);
+        if (chips) addToCart(chips, 20);
+
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
-          type: 'order-draft',
-          timestamp: new Date(),
-          data: {
-            items: [
-              { productId: '1', quantity: 50, confirmed: false },
-              { productId: '3', quantity: 20, confirmed: false }
-            ],
-            isConfirmed: false
-          }
+          type: 'text',
+          content: '已为您将 50箱可乐 和 20盒薯片 添加到购物车，请确认！',
+          timestamp: new Date()
         };
       } else if (text.includes('替换为可口可乐')) {
+        const cola = MOCK_PRODUCTS.find(p => p.id === '1');
+        if (cola) addToCart(cola, 10);
+
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
-          type: 'order-draft',
-          content: '好的，已为您替换为可口可乐。',
-          timestamp: new Date(),
-          data: {
-            items: [
-              { productId: '1', quantity: 10, confirmed: false }
-            ],
-            isConfirmed: false
-          }
+          type: 'text',
+          content: '好的，已为您将 10箱可口可乐 添加到购物车。',
+          timestamp: new Date()
         };
       } else if (text.includes('随便来5箱最畅销的')) {
+        const water = MOCK_PRODUCTS.find(p => p.id === '5');
+        if (water) addToCart(water, 5);
+
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
-          type: 'order-draft',
-          content: '为您挑选了销量最好的农夫山泉，请确认：',
-          timestamp: new Date(),
-          data: {
-            items: [
-              { productId: '5', quantity: 5, confirmed: false }
-            ],
-            isConfirmed: false
-          }
+          type: 'text',
+          content: '为您挑选了销量最好的农夫山泉，已添加 5箱 到购物车，请确认！',
+          timestamp: new Date()
         };
       } else if (text.includes('催单') || text.includes('发货') || text.includes('还没到')) {
         replyMsg = {
@@ -602,6 +545,43 @@ export default function ChatPage() {
             suggestions: ['帮我加急', '不用了，正常发就行', '查看物流']
           }
         };
+      } else if (text.includes('确认订单') || text.includes('下单') || text.includes('结算')) {
+        if (cartItems.length === 0) {
+          replyMsg = {
+            id: (Date.now() + 1).toString(),
+            role: 'agent',
+            type: 'text',
+            content: '您的购物车还是空的哦，请先添加商品。',
+            timestamp: new Date()
+          };
+        } else {
+          const confirmMsg: Message = {
+            id: Date.now().toString(),
+            role: 'agent',
+            type: 'text',
+            content: "订单 SO-20240225-001 已确认。\n智能调度系统已安排优先发货。这是您的订货单，可以长按转发给客户或老板：",
+            timestamp: new Date()
+          };
+          
+          const imageMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'agent',
+            type: 'order-image',
+            timestamp: new Date(),
+            data: {
+              items: cartItems.map(item => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                confirmed: true
+              })),
+              orderNo: 'SO-20240225-001'
+            }
+          };
+          
+          updateMessages(prev => [...prev, confirmMsg, imageMsg]);
+          clearCart();
+          return; // Early return since we updated messages already
+        }
       } else if (text.includes('退货') || text.includes('坏了') || text.includes('碎了')) {
         replyMsg = {
           id: (Date.now() + 1).toString(),
@@ -708,41 +688,70 @@ export default function ChatPage() {
 
       {/* Header */}
       <div className="h-16 border-b border-gray-100 flex items-center justify-between px-5 shrink-0 z-20 backdrop-blur-xl bg-white/80 sticky top-0">
-        <div className="flex items-center gap-3 cursor-pointer group">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">
-            <Box size={18} />
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <h1 className="font-bold text-gray-900 text-[15px] leading-none tracking-tight">广州兴盛批发部</h1>
-              <div className="px-1.5 py-0.5 rounded bg-blue-50 text-[10px] font-medium text-blue-600 border border-blue-100">PRO</div>
+        {isEmbedded ? (
+          <div className="w-full flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white shadow-md">
+                <Sparkles size={16} />
+              </div>
+              <span className="font-bold text-gray-900">AI 助手</span>
+              <span className="text-[10px] text-gray-500 flex items-center gap-1 ml-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                在线
+              </span>
             </div>
-            <span className="text-[11px] text-gray-500 leading-tight mt-1 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-              AI 引擎运行中
-            </span>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={createNewChat} 
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                title="新建对话"
+              >
+                <PlusCircle size={16} />
+              </button>
+              <button onClick={onCollapse} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+                <ChevronDown size={20} />
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={createNewChat} 
-            className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
-            title="新建对话"
-          >
-            <PlusCircle size={14} />
-            新对话
-          </button>
-          <button 
-            onClick={() => setShowHistory(!showHistory)} 
-            className={cn(
-              "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
-              showHistory ? "bg-blue-100 text-blue-600" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-            )}
-            title="历史对话"
-          >
-            <History size={20} />
-          </button>
-        </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 cursor-pointer group">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">
+                <Box size={18} />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1.5">
+                  <h1 className="font-bold text-gray-900 text-[15px] leading-none tracking-tight">广州兴盛批发部</h1>
+                  <div className="px-1.5 py-0.5 rounded bg-blue-50 text-[10px] font-medium text-blue-600 border border-blue-100">PRO</div>
+                </div>
+                <span className="text-[11px] text-gray-500 leading-tight mt-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  AI 引擎运行中
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={createNewChat} 
+                className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
+                title="新建对话"
+              >
+                <PlusCircle size={14} />
+                新对话
+              </button>
+              <button 
+                onClick={() => setShowHistory(!showHistory)} 
+                className={cn(
+                  "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
+                  showHistory ? "bg-blue-100 text-blue-600" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                )}
+                title="历史对话"
+              >
+                <History size={20} />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* History Sidebar / Overlay */}
@@ -961,20 +970,22 @@ export default function ChatPage() {
 
       {/* Floating Cart Button - Persistent */}
       <AnimatePresence>
-        {totalItems > 0 && (
+        {!isEmbedded && (
           <motion.button
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => handleSend("查看购物车")} // Or open a cart modal
+            onClick={() => setIsCartModalOpen(true)}
             className="absolute bottom-24 right-5 w-14 h-14 bg-gray-900 text-white rounded-full shadow-xl shadow-gray-400/30 z-40 flex items-center justify-center border-4 border-white"
           >
             <ShoppingCart size={24} />
-            <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full text-white text-xs flex items-center justify-center border-2 border-white font-bold">
-              {totalItems}
-            </div>
+            {totalItems > 0 && (
+              <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full text-white text-xs flex items-center justify-center border-2 border-white font-bold">
+                {totalItems}
+              </div>
+            )}
           </motion.button>
         )}
       </AnimatePresence>
@@ -1072,6 +1083,23 @@ export default function ChatPage() {
                    <RefreshCw size={20} />
                  </div>
                </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Cart Modal */}
+      <AnimatePresence>
+        {isCartModalOpen && (
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute inset-0 z-50 bg-white flex flex-col"
+          >
+            <div className="flex-1 overflow-hidden relative">
+              <CartPage onClose={() => setIsCartModalOpen(false)} />
             </div>
           </motion.div>
         )}
