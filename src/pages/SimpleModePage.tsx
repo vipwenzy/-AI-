@@ -29,7 +29,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const { items: cartItems, updateQuantity, removeFromCart, addToCart, totalAmount } = useCart();
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [inputType, setInputType] = useState<'text' | 'voice'>('text');
+  const [inputType, setInputType] = useState<'text' | 'voice'>('voice');
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [speechError, setSpeechError] = useState<string | null>(null);
@@ -501,10 +501,27 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         )}
 
         {cartItems.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-gray-400">
-            <ShoppingCart size={48} className="mb-4 opacity-20" />
-            <p>购物车是空的</p>
-            <p className="text-xs mt-2">试试说："来10箱可乐"</p>
+          <div className="h-full flex flex-col items-center justify-center px-6 text-center">
+            <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6 shadow-inner">
+              <Mic size={48} className="text-blue-500" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">欢迎使用语音订货</h3>
+            <p className="text-gray-500 mb-8 text-sm">点击下方麦克风，直接说出您需要的商品</p>
+            
+            <div className="space-y-3 w-full max-w-xs text-left">
+              <div className="bg-white p-3 rounded-xl shadow-sm text-sm text-gray-700 flex items-center gap-3 border border-gray-100">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">1</span>
+                "来10箱可口可乐"
+              </div>
+              <div className="bg-white p-3 rounded-xl shadow-sm text-sm text-gray-700 flex items-center gap-3 border border-gray-100">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">2</span>
+                "把农夫山泉改成5箱"
+              </div>
+              <div className="bg-white p-3 rounded-xl shadow-sm text-sm text-gray-700 flex items-center gap-3 border border-gray-100">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">3</span>
+                "去掉百事可乐"
+              </div>
+            </div>
           </div>
         ) : (
           <div className="bg-white rounded-xl p-3 shadow-sm">
