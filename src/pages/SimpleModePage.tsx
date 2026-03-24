@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, MessageSquare } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { MOCK_PRODUCTS } from '../data/mockDb';
+import { MOCK_PRODUCTS, Product } from '../data/mockDb';
 import { cn } from '../lib/utils';
 
 interface SimpleModePageProps {
@@ -11,6 +11,7 @@ interface SimpleModePageProps {
 
 const SUGGESTIONS = [
   "来10箱可口可乐",
+  "来两箱可乐",
   "把农夫山泉改成5箱",
   "去掉百事可乐",
   "奥利奥和雪碧各来5箱"
@@ -41,6 +42,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [showChatHistory, setShowChatHistory] = useState(false);
+  const [ambiguousMatches, setAmbiguousMatches] = useState<Product[] | null>(null);
+  const [pendingAction, setPendingAction] = useState<{qty: number, isRemove: boolean, isModify: boolean} | null>(null);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -173,8 +176,59 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     const isModify = /改成|修改为|变成/.test(text);
     
     let actions: string[] = [];
+    let ambiguousGroup: Product[] = [];
+    
+    // Extract quantity
+    let qty = 1;
+    const match = text.match(/(\d+)/);
+    if (match && match[1]) qty = parseInt(match[1], 10);
+    else if (text.includes('各来5') || text.includes('各加5')) qty = 5;
+    else if (text.includes('各来10') || text.includes('各加10')) qty = 10;
+    else if (text.includes('两') || text.includes('二')) qty = 2;
 
-    // Find mentioned products
+    // Check for ambiguous keywords first
+    const ambiguousKeywords = ['可乐', '乐事', '矿泉水', '薯片', '戒指', '莫桑钻', '水'];
+    let foundAmbiguous = false;
+    
+    for (const kw of ambiguousKeywords) {
+      if (text.includes(kw)) {
+        // Check if it contains a more specific name
+        const specificMatch = MOCK_PRODUCTS.find(p => p.name.includes(kw) && text.includes(p.name.split(' ')[0]));
+        if (!specificMatch) {
+          ambiguousGroup = MOCK_PRODUCTS.filter(p => p.name.includes(kw));
+          if (ambiguousGroup.length > 1) {
+            foundAmbiguous = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (foundAmbiguous) {
+      setAmbiguousMatches(ambiguousGroup);
+      setPendingAction({ qty, isRemove, isModify });
+      
+      const newUserMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: text,
+        type: isVoice ? 'voice' : 'text',
+        timestamp: new Date()
+      };
+
+      const newAiMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'ai',
+        content: `找到多个包含该名称的商品，请选择您需要哪一个？`,
+        type: 'text',
+        timestamp: new Date()
+      };
+
+      setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+      return;
+    }
+
+    // Normal processing
     MOCK_PRODUCTS.forEach(product => {
       // Very basic keyword matching
       const keyword = product.name.replace(/ /g, '').slice(0, 4); // basic matching
@@ -184,16 +238,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           removeFromCart(product.id);
           actions.push(`已为您移除 ${product.name}`);
         } else {
-          // Try to extract quantity
-          const match = text.match(new RegExp(`(?:${keyword}|${shortName}).*?(\\d+)`));
-          const matchBefore = text.match(new RegExp(`(\\d+).*?(?:${keyword}|${shortName})`));
-          
-          let qty = 1;
-          if (match && match[1]) qty = parseInt(match[1], 10);
-          else if (matchBefore && matchBefore[1]) qty = parseInt(matchBefore[1], 10);
-          else if (text.includes('各来5') || text.includes('各加5')) qty = 5;
-          else if (text.includes('各来10') || text.includes('各加10')) qty = 10;
-          
           if (isModify) {
             const item = cartItems.find(i => i.productId === product.id);
             if (item) {
@@ -230,6 +274,50 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     };
 
     setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+  };
+
+  const handleAmbiguousSelection = (product: Product) => {
+    if (!pendingAction) return;
+    
+    const { qty, isRemove, isModify } = pendingAction;
+    let actionText = '';
+
+    if (isRemove) {
+      removeFromCart(product.id);
+      actionText = `已为您移除 ${product.name}`;
+    } else if (isModify) {
+      const item = cartItems.find(i => i.productId === product.id);
+      if (item) {
+        updateQuantity(product.id, qty - item.quantity);
+        actionText = `已将 ${product.name} 数量修改为 ${qty}`;
+      } else {
+        addToCart(product, qty);
+        actionText = `已为您添加 ${qty}件 ${product.name}`;
+      }
+    } else {
+      addToCart(product, qty);
+      actionText = `已为您添加 ${qty}件 ${product.name}`;
+    }
+
+    const newUserMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: `选择了: ${product.name}`,
+      type: 'text',
+      timestamp: new Date()
+    };
+
+    const newAiMsg: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      role: 'ai',
+      content: actionText,
+      type: 'text',
+      timestamp: new Date()
+    };
+
+    setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+    setAmbiguousMatches(null);
+    setPendingAction(null);
   };
 
   const handleSend = () => {
@@ -676,6 +764,59 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
               <X size={14} />
             </button>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Ambiguous Match Modal */}
+      <AnimatePresence>
+        {ambiguousMatches && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setAmbiguousMatches(null);
+                setPendingAction(null);
+              }}
+              className="absolute inset-0 bg-black/40 z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="absolute top-1/2 left-4 right-4 -translate-y-1/2 bg-white rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col max-h-[70vh]"
+            >
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+                <h3 className="font-bold text-gray-800">请选择具体商品</h3>
+                <button 
+                  onClick={() => {
+                    setAmbiguousMatches(null);
+                    setPendingAction(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="overflow-y-auto p-2">
+                {ambiguousMatches.map(product => (
+                  <button
+                    key={product.id}
+                    onClick={() => handleAmbiguousSelection(product)}
+                    className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 rounded-xl transition-colors text-left border-b border-gray-50 last:border-0"
+                  >
+                    <img src={product.image} alt={product.name} className="w-12 h-12 rounded-lg object-cover bg-gray-100 shrink-0" referrerPolicy="no-referrer" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 truncate">{product.name}</div>
+                      <div className="text-sm text-[#ff5000] font-bold mt-0.5">¥{product.price.toFixed(2)}</div>
+                    </div>
+                    <ChevronRight size={18} className="text-gray-300 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
