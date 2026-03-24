@@ -29,9 +29,9 @@ const OrderStatusBadge = ({ status }: { status: OrderStatus }) => {
   );
 };
 
-export default function OrdersPage({ onBack }: { onBack?: () => void }) {
+export default function OrdersPage({ onBack, initialOrderId }: { onBack?: () => void, initialOrderId?: string }) {
   const [activeTab, setActiveTab] = useState('全部');
-  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(initialOrderId || null);
   const [isEditing, setIsEditing] = useState(false);
   const [editItems, setEditItems] = useState<{name: string, price: number, quantity: number, unit: string, image: string}[]>([
     { name: '可口可乐 330ml 罐装', price: 45.00, quantity: 50, unit: '箱', image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=100&q=80' },

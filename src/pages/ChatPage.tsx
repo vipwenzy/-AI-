@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Check, X, Sparkles, RefreshCw, ArrowRight, Minus, Plus, ChevronDown, MoreHorizontal, Search, Bell, Zap, BarChart3, Box, Trash2, PlusCircle, History, MessageSquare, Camera, ScanLine, PenTool, ShoppingCart, Gift, AlertCircle, Share2 } from 'lucide-react';
+import { Mic, Send, Check, X, Sparkles, RefreshCw, ArrowRight, Minus, Plus, ChevronDown, MoreHorizontal, Search, Bell, Zap, BarChart3, Box, Trash2, PlusCircle, History, MessageSquare, Camera, ScanLine, PenTool, ShoppingCart, Gift, AlertCircle, Share2, ShoppingBag } from 'lucide-react';
 import { MOCK_PRODUCTS, Product, Message, OrderItem } from '../data/mockDb';
 import { cn } from '../lib/utils';
 import { useCart } from '../context/CartContext';
@@ -289,9 +289,121 @@ const OrderImageCard = ({ items, orderNo }: { items: OrderItem[], orderNo: strin
   );
 };
 
+const ProductListCard = ({ products, onAddToCart }: { products: Product[], onAddToCart: (product: Product) => void }) => {
+  const [addedItems, setAddedItems] = useState<Record<string, boolean>>({});
+
+  const handleAdd = (product: Product) => {
+    onAddToCart(product);
+    setAddedItems(prev => ({ ...prev, [product.id]: true }));
+    setTimeout(() => {
+      setAddedItems(prev => ({ ...prev, [product.id]: false }));
+    }, 1000);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden w-full max-w-[280px]">
+      <div className="bg-gradient-to-r from-orange-500 to-red-500 p-3 text-white flex items-center gap-2">
+        <Zap size={18} className="text-yellow-200" />
+        <span className="font-bold text-sm">本周爆款推荐</span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {products.map((product, index) => (
+          <div key={product.id} className="p-3 flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden shrink-0">
+              <img src={product.image} alt={product.name} className="w-full h-full object-cover mix-blend-multiply" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                <span className="text-orange-600 font-bold font-mono">¥{product.price}</span> / {product.unit}
+              </div>
+            </div>
+            <button 
+              onClick={() => handleAdd(product)}
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0",
+                addedItems[product.id] 
+                  ? "bg-green-500 text-white scale-110" 
+                  : "bg-blue-50 text-blue-600 hover:bg-blue-100 active:scale-90"
+              )}
+            >
+              {addedItems[product.id] ? <Check size={16} /> : <Plus size={16} />}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const OrderHistoryCard = ({ order, onReorder, onViewDetails }: { order: any, onReorder: (items: any[]) => void, onViewDetails?: () => void }) => {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden w-full max-w-[280px]">
+      <div 
+        className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 cursor-pointer hover:bg-gray-100 transition-colors"
+        onClick={onViewDetails}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+            <ShoppingBag size={12} className="text-blue-600" />
+          </div>
+          <span className="font-bold text-sm text-gray-900">{order.orderNo}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">{order.status}</span>
+          {onViewDetails && <ArrowRight size={14} className="text-gray-400" />}
+        </div>
+      </div>
+      
+      <div className="p-3 space-y-3" onClick={onViewDetails} style={{ cursor: onViewDetails ? 'pointer' : 'default' }}>
+        <div className="text-xs text-gray-500 mb-2">{order.date}</div>
+        {order.items.map((item: any, index: number) => {
+          const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+          if (!product) return null;
+          return (
+            <div key={index} className="flex justify-between items-start text-sm">
+              <div className="flex-1 pr-2">
+                <div className="font-medium text-gray-900 truncate">{product.name}</div>
+                <div className="text-xs text-gray-500 mt-0.5">¥{product.price} × {item.quantity} {product.unit}</div>
+              </div>
+              <div className="font-mono font-medium text-gray-900">
+                ¥{(product.price * item.quantity).toFixed(2)}
+              </div>
+            </div>
+          );
+        })}
+        
+        <div className="border-t border-dashed border-gray-200 pt-3 flex justify-between items-end mt-2">
+          <span className="text-xs text-gray-500">合计总额</span>
+          <span className="text-lg font-bold text-gray-900 font-mono">
+            <span className="text-xs mr-0.5">¥</span>{order.total.toFixed(2)}
+          </span>
+        </div>
+      </div>
+      
+      <div className="p-3 bg-gray-50 border-t border-gray-100 flex gap-2">
+        {onViewDetails && (
+          <button 
+            onClick={onViewDetails}
+            className="flex-1 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-xl font-medium text-sm shadow-sm active:scale-95 transition-transform flex justify-center items-center"
+          >
+            查看详情
+          </button>
+        )}
+        <button 
+          onClick={() => onReorder(order.items)}
+          className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-medium text-sm shadow-md shadow-blue-200 active:scale-95 transition-transform flex justify-center items-center gap-1.5"
+        >
+          <ShoppingCart size={16} /> 再来一单
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const INITIAL_MESSAGE = '李老板下午好，我是广州兴盛批发部的 AI 开单助手！\n\n您可以这样使用我：\n🎤 按住底部麦克风，直接说："来50箱可乐"\n📸 点击左下角相机，拍下您的手写缺货单\n⌨️ 在下方输入框打字："查一下昨天的订单"\n\n请问今天需要点什么？您可以直接点击下方建议，或对我说：';
 
-export default function ChatPage({ isEmbedded, onCollapse }: { isEmbedded?: boolean, onCollapse?: () => void }) {
+export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmbedded?: boolean, onCollapse?: () => void, onNavigate?: (tab: any) => void }) {
   const [sessions, setSessions] = useState<ChatSession[]>([
     {
       id: '1',
@@ -305,7 +417,7 @@ export default function ChatPage({ isEmbedded, onCollapse }: { isEmbedded?: bool
           content: INITIAL_MESSAGE,
           timestamp: new Date(),
           data: {
-            suggestions: ['来50箱可乐和20盒薯片', '最近哪些货卖得好？', '我昨天的订单发货了吗？']
+            suggestions: ['最近有什么优惠活动', '查一下我近期的订单', '来50箱可乐和20盒薯片']
           }
         }
       ]
@@ -387,7 +499,7 @@ export default function ChatPage({ isEmbedded, onCollapse }: { isEmbedded?: bool
         content: INITIAL_MESSAGE,
         timestamp: new Date(),
         data: {
-          suggestions: ['来50箱可乐和20盒薯片', '最近哪些货卖得好？', '我昨天的订单发货了吗？']
+          suggestions: ['最近有什么优惠活动', '查一下我近期的订单', '来50箱可乐和20盒薯片']
         }
       }]
     };
@@ -427,28 +539,74 @@ export default function ChatPage({ isEmbedded, onCollapse }: { isEmbedded?: bool
         const cola = MOCK_PRODUCTS.find(p => p.id === '1');
         const chips = MOCK_PRODUCTS.find(p => p.id === '3');
         const water = MOCK_PRODUCTS.find(p => p.id === '5');
-        if (cola) addToCart(cola, 50);
-        if (chips) addToCart(chips, 30);
-        if (water) addToCart(water, 100);
+        const products = [cola, chips, water].filter(Boolean) as Product[];
 
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
-          type: 'text',
-          content: '为您推荐本周销量最高的商品，已为您添加到购物车，请确认！',
-          timestamp: new Date()
+          type: 'product-list',
+          content: '为您推荐本周销量最高的商品，您可以直接点击添加：',
+          timestamp: new Date(),
+          data: {
+            products: products
+          }
         };
-      } else if (text.includes('限时特惠') || text.includes('优惠')) {
+      } else if (text.includes('限时特惠') || text.includes('优惠') || text.includes('活动')) {
         const pepsi = MOCK_PRODUCTS.find(p => p.id === '2');
         const oreo = MOCK_PRODUCTS.find(p => p.id === '6');
-        if (pepsi) addToCart(pepsi, 20);
+        const products = [pepsi, oreo].filter(Boolean) as Product[];
+
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'product-list',
+          content: '最近有以下商品正在做限时促销活动，进货价非常划算，您可以直接点击添加：',
+          timestamp: new Date(),
+          data: {
+            products: products,
+            suggestions: ['帮我把这两款各加10箱', '还有其他优惠吗？']
+          }
+        };
+      } else if (text.includes('各加10箱') || text.includes('这两款各加')) {
+        const pepsi = MOCK_PRODUCTS.find(p => p.id === '2');
+        const oreo = MOCK_PRODUCTS.find(p => p.id === '6');
+        if (pepsi) addToCart(pepsi, 10);
         if (oreo) addToCart(oreo, 10);
 
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
           type: 'text',
-          content: '这几款商品正在做限时促销，进货价非常划算，已为您添加到购物车！',
+          content: '好的，已为您将百事可乐和奥利奥各加10箱到购物车！您可以点击右上角购物车查看。',
+          timestamp: new Date()
+        };
+      } else if (text.includes('其他优惠') || text.includes('还有其他')) {
+        const water = MOCK_PRODUCTS.find(p => p.id === '5');
+        const chips = MOCK_PRODUCTS.find(p => p.id === '4');
+        const products = [water, chips].filter(Boolean) as Product[];
+
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'product-list',
+          content: '当然，农夫山泉和乐事香辣味薯片目前也有满减活动，非常适合搭配进货：',
+          timestamp: new Date(),
+          data: {
+            products: products,
+            suggestions: ['帮我把这两款各加5箱']
+          }
+        };
+      } else if (text.includes('各加5箱') || text.includes('这两款各加5')) {
+        const water = MOCK_PRODUCTS.find(p => p.id === '5');
+        const chips = MOCK_PRODUCTS.find(p => p.id === '4');
+        if (water) addToCart(water, 5);
+        if (chips) addToCart(chips, 5);
+
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'text',
+          content: '好的，已为您将农夫山泉和乐事香辣味薯片各加5箱到购物车！',
           timestamp: new Date()
         };
       } else if (text.includes('常购清单') || text.includes('以前的单子')) {
@@ -465,6 +623,54 @@ export default function ChatPage({ isEmbedded, onCollapse }: { isEmbedded?: bool
           type: 'text',
           content: '好的，这是您经常采购的商品组合，已为您全部添加到购物车，请确认！',
           timestamp: new Date()
+        };
+      } else if (text.includes('近期') || text.includes('最近')) {
+        const water = MOCK_PRODUCTS.find(p => p.id === '5');
+        const cola = MOCK_PRODUCTS.find(p => p.id === '1');
+        const oreo = MOCK_PRODUCTS.find(p => p.id === '6');
+        
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'order-history',
+          content: '为您找到最近的一笔订单。该订单已接单。您可以点击下方按钮再次购买相同商品，或点击“查看详情”进入订单页：',
+          timestamp: new Date(),
+          data: {
+            order: {
+              orderNo: 'SO-20240225-001',
+              status: '已接单',
+              date: '2024-02-25 14:30',
+              items: [
+                { productId: '5', quantity: 100 },
+                { productId: '1', quantity: 10 },
+                { productId: '6', quantity: 5 }
+              ],
+              total: 3540.00
+            }
+          }
+        };
+      } else if (text.includes('昨天') || text.includes('订单')) {
+        const cola = MOCK_PRODUCTS.find(p => p.id === '1');
+        const chips = MOCK_PRODUCTS.find(p => p.id === '3');
+        
+        replyMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          type: 'order-history',
+          content: '为您找到昨天的订单。该订单待接单。您可以点击下方按钮再次购买相同商品，或点击“查看详情”进入订单页：',
+          timestamp: new Date(),
+          data: {
+            order: {
+              orderNo: 'SO-20240226-001',
+              status: '待接单',
+              date: '2024-02-26 10:00',
+              items: [
+                { productId: '1', quantity: 50 },
+                { productId: '3', quantity: 20 }
+              ],
+              total: 3550.00
+            }
+          }
         };
       } else if (text.includes('雪碧')) {
         replyMsg = {
@@ -879,6 +1085,33 @@ export default function ChatPage({ isEmbedded, onCollapse }: { isEmbedded?: bool
                   items={msg.data.items} 
                   orderNo={msg.data.orderNo} 
                 />
+              )}
+
+              {msg.type === 'product-list' && msg.data?.products && (
+                <div className="mt-2">
+                  <ProductListCard 
+                    products={msg.data.products} 
+                    onAddToCart={(product) => addToCart(product, 1)} 
+                  />
+                </div>
+              )}
+
+              {msg.type === 'order-history' && msg.data?.order && (
+                <div className="mt-2">
+                  <OrderHistoryCard 
+                    order={msg.data.order} 
+                    onReorder={(items) => {
+                      items.forEach((item: any) => {
+                        const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+                        if (product) {
+                          addToCart(product, item.quantity);
+                        }
+                      });
+                      setIsCartModalOpen(true);
+                    }}
+                    onViewDetails={onNavigate ? () => onNavigate(`profile:orders:${msg.data.order.orderNo}`) : undefined}
+                  />
+                </div>
               )}
 
               {msg.data?.warning && (

@@ -1,15 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, ChevronRight, CreditCard, MapPin, HelpCircle, LogOut, User, Shield, Bell, Wallet, FileText, Gift, MessageCircle, ShoppingBag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import OrdersPage from './OrdersPage';
 
-export default function ProfilePage() {
+export default function ProfilePage({ initialRoute }: { initialRoute?: string }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [showOrders, setShowOrders] = useState(false);
+  const [showOrders, setShowOrders] = useState(initialRoute?.startsWith('orders') || false);
+  const [initialOrderId, setInitialOrderId] = useState<string | undefined>(
+    initialRoute?.startsWith('orders:') ? initialRoute.split(':')[1] : undefined
+  );
+
+  useEffect(() => {
+    if (initialRoute?.startsWith('orders')) {
+      setShowOrders(true);
+      if (initialRoute.includes(':')) {
+        setInitialOrderId(initialRoute.split(':')[1]);
+      }
+    }
+  }, [initialRoute]);
 
   if (showOrders) {
-    return <OrdersPage onBack={() => setShowOrders(false)} />;
+    return <OrdersPage onBack={() => setShowOrders(false)} initialOrderId={initialOrderId} />;
   }
 
   return (

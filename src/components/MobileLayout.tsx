@@ -22,7 +22,9 @@ const CartBadge = () => {
 };
 
 export function MobileLayout({ children }: LayoutProps) {
-  const [activeTab, setActiveTab] = useState<'chat' | 'shop' | 'cart' | 'profile'>('cart');
+  const [activeTab, setActiveTab] = useState<string>('shop');
+
+  const currentTab = activeTab.split(':')[0];
 
   return (
     <CartProvider>
@@ -51,9 +53,9 @@ export function MobileLayout({ children }: LayoutProps) {
 
           {/* Main Content Area */}
           <div className="flex-1 overflow-hidden relative bg-white flex flex-col">
-            {activeTab === 'shop' && <ShopPage />}
-            {activeTab === 'chat' && <ChatPage />}
-            {activeTab === 'profile' && <ProfilePage />}
+            {currentTab === 'shop' && <ShopPage />}
+            {currentTab === 'chat' && <ChatPage onNavigate={setActiveTab} />}
+            {currentTab === 'profile' && <ProfilePage initialRoute={activeTab.split(':').slice(1).join(':')} />}
           </div>
 
           {/* Bottom Navigation - Glassmorphism Light */}
@@ -61,7 +63,7 @@ export function MobileLayout({ children }: LayoutProps) {
             <NavItem 
               icon={<Store size={24} strokeWidth={2.5} />} 
               label="店铺" 
-              active={activeTab === 'shop'} 
+              active={currentTab === 'shop'} 
               onClick={() => setActiveTab('shop')}
             />
             <NavItem 
@@ -74,14 +76,14 @@ export function MobileLayout({ children }: LayoutProps) {
                 </div>
               } 
               label="购物车" 
-              active={activeTab === 'chat'} 
+              active={currentTab === 'chat'} 
               onClick={() => setActiveTab('chat')}
               badge={<CartBadge />}
             />
             <NavItem 
               icon={<User size={24} strokeWidth={2.5} />} 
               label="我的" 
-              active={activeTab === 'profile'} 
+              active={currentTab === 'profile'} 
               onClick={() => setActiveTab('profile')}
             />
           </div>

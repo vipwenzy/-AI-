@@ -147,7 +147,7 @@ export interface Message {
   id: string;
   role: 'user' | 'agent' | 'system';
   content?: string;
-  type: 'text' | 'audio' | 'order-draft' | 'order-confirmed' | 'order-image';
+  type: 'text' | 'audio' | 'order-draft' | 'order-confirmed' | 'order-image' | 'product-list' | 'order-history';
   data?: any; // For order drafts etc
   timestamp: Date;
 }
