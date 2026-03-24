@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, X, ShoppingCart, Keyboard, Check, Search } from 'lucide-react';
+import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, MessageSquare } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { MOCK_PRODUCTS } from '../data/mockDb';
 import { cn } from '../lib/utils';
@@ -16,6 +16,14 @@ const SUGGESTIONS = [
   "奥利奥和雪碧各来5箱"
 ];
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'ai';
+  content: string;
+  type: 'text' | 'voice';
+  timestamp: Date;
+}
+
 export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const { items: cartItems, updateQuantity, removeFromCart, addToCart, totalAmount } = useCart();
   const [inputValue, setInputValue] = useState('');
@@ -24,7 +32,15 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [speechError, setSpeechError] = useState<string | null>(null);
+  const [hasMicPermission, setHasMicPermission] = useState(false);
   const [unselectedIds, setUnselectedIds] = useState<Set<string>>(new Set());
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<'express' | 'pickup'>('express');
+  const [message, setMessage] = useState('');
+  const [sortBy, setSortBy] = useState<'time' | 'price' | 'name'>('time');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [showChatHistory, setShowChatHistory] = useState(false);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -50,6 +66,24 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const selectedCartItems = cartItems.filter(i => !unselectedIds.has(i.productId));
   const selectedTotalAmount = selectedCartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const selectedTotalQuantity = selectedCartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  const sortedCartItems = [...cartItems];
+  
+  if (sortBy === 'time') {
+    if (sortOrder === 'desc') {
+      sortedCartItems.reverse();
+    }
+  } else {
+    sortedCartItems.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'price') {
+        comparison = a.product.price - b.product.price;
+      } else if (sortBy === 'name') {
+        comparison = a.product.name.localeCompare(b.product.name, 'zh-CN');
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }
 
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -90,46 +124,56 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     }
   }, [speechError]);
 
-  const startRecording = async (e: React.SyntheticEvent) => {
+  const toggleRecording = async (e: React.SyntheticEvent) => {
     e.preventDefault();
-    setSpeechError(null);
     
-    try {
-      // Explicitly request microphone permission first to trigger the browser prompt
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Stop the tracks immediately since we only need the permission for SpeechRecognition
-      stream.getTracks().forEach(track => track.stop());
-      
-      setIsRecording(true);
-      setTranscript('');
+    if (isRecording) {
+      // Stop recording
+      setIsRecording(false);
       if (recognitionRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {}
+        recognitionRef.current.stop();
       }
-    } catch (err) {
-      console.error('Microphone permission denied', err);
-      setSpeechError('请允许使用麦克风以进行语音输入');
+      if (transcript) {
+        processInput(transcript, true);
+        setTranscript('');
+      }
+      return;
     }
-  };
 
-  const stopRecording = (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    setIsRecording(false);
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
+    // Start recording
+    setSpeechError(null);
+    setIsRecording(true);
+    setTranscript('');
+    
+    if (!hasMicPermission) {
+      try {
+        // Explicitly request microphone permission first to trigger the browser prompt
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Stop the tracks immediately since we only need the permission for SpeechRecognition
+        stream.getTracks().forEach(track => track.stop());
+        setHasMicPermission(true);
+      } catch (err) {
+        console.error('Microphone permission denied', err);
+        setSpeechError('请允许使用麦克风以进行语音输入');
+        setIsRecording(false);
+        return;
+      }
     }
-    if (transcript) {
-      processInput(transcript);
-      setTranscript('');
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+      } catch (e) {}
     }
   };
 
   // Simple intent parser
-  const processInput = (text: string) => {
+  const processInput = (text: string, isVoice: boolean = false) => {
     const isRemove = /去掉|不要|删除|取消|减/.test(text);
     const isModify = /改成|修改为|变成/.test(text);
     
+    let actions: string[] = [];
+
     // Find mentioned products
     MOCK_PRODUCTS.forEach(product => {
       // Very basic keyword matching
@@ -138,6 +182,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       if (text.includes(keyword) || text.includes(shortName)) {
         if (isRemove) {
           removeFromCart(product.id);
+          actions.push(`已为您移除 ${product.name}`);
         } else {
           // Try to extract quantity
           const match = text.match(new RegExp(`(?:${keyword}|${shortName}).*?(\\d+)`));
@@ -153,15 +198,38 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             const item = cartItems.find(i => i.productId === product.id);
             if (item) {
               updateQuantity(product.id, qty - item.quantity);
+              actions.push(`已将 ${product.name} 数量修改为 ${qty}`);
             } else {
               addToCart(product, qty);
+              actions.push(`已为您添加 ${qty}件 ${product.name}`);
             }
           } else {
             addToCart(product, qty);
+            actions.push(`已为您添加 ${qty}件 ${product.name}`);
           }
         }
       }
     });
+
+    let aiResponse = actions.length > 0 ? actions.join('，') + '。' : '抱歉，我没有听清您需要的商品，请再说一遍。';
+
+    const newUserMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: text,
+      type: isVoice ? 'voice' : 'text',
+      timestamp: new Date()
+    };
+
+    const newAiMsg: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      role: 'ai',
+      content: aiResponse,
+      type: 'text',
+      timestamp: new Date()
+    };
+
+    setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
   };
 
   const handleSend = () => {
@@ -177,6 +245,97 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     setInputValue('');
     setShowSuggestions(false);
   };
+
+  if (showCheckout) {
+    return (
+      <div className="flex flex-col h-full bg-[#f5f5f9] relative">
+        {/* Header */}
+        <div className="h-14 bg-white border-b border-gray-100 flex items-center px-4 shrink-0 z-10">
+          <button onClick={() => setShowCheckout(false)} className="p-2 -ml-2 text-gray-800">
+            <ChevronLeft size={24} />
+          </button>
+          <div className="flex-1 text-center font-bold text-gray-800 text-lg pr-6">
+            提交订单
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-32">
+          {/* User Info */}
+          <div className="bg-white rounded-xl p-4 flex items-center justify-between shadow-sm cursor-pointer hover:bg-gray-50 transition-colors">
+            <span className="text-gray-800 text-sm">立即完善个人信息</span>
+            <ChevronRight size={16} className="text-gray-400" />
+          </div>
+
+          {/* Delivery Method */}
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="text-sm text-gray-800 mb-4">选择送货方式</div>
+            <div className="flex items-center gap-12">
+              <button 
+                onClick={() => setDeliveryMethod('express')}
+                className="flex items-center gap-2"
+              >
+                {deliveryMethod === 'express' ? (
+                  <CheckCircle2 size={20} className="text-[#ff5000] fill-[#ff5000] text-white" />
+                ) : (
+                  <Circle size={20} className="text-gray-300" />
+                )}
+                <span className="text-sm text-gray-800">快递/物流</span>
+              </button>
+              <button 
+                onClick={() => setDeliveryMethod('pickup')}
+                className="flex items-center gap-2"
+              >
+                {deliveryMethod === 'pickup' ? (
+                  <CheckCircle2 size={20} className="text-[#ff5000] fill-[#ff5000] text-white" />
+                ) : (
+                  <Circle size={20} className="text-gray-300" />
+                )}
+                <span className="text-sm text-gray-800">自提</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Amount Summary */}
+          <div className="bg-white rounded-xl p-4 shadow-sm space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-800">订单金额</span>
+              <span className="text-[#ff5000] font-medium text-lg">¥{selectedTotalAmount.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-800">合计金额</span>
+              <span className="text-[#ff5000] font-medium text-lg">¥{selectedTotalAmount.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Message */}
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="text-sm text-gray-800 mb-3">留言</div>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="请输入留言"
+              className="w-full bg-gray-50 rounded-lg p-3 text-sm resize-none h-24 focus:outline-none focus:ring-1 focus:ring-gray-200"
+            />
+          </div>
+        </div>
+
+        {/* Bottom Bar */}
+        <div className="absolute bottom-0 left-0 right-0 bg-[#f5f5f9] p-4 pb-8">
+          <button 
+            onClick={() => {
+              alert('订单提交成功！');
+              cartItems.forEach(item => removeFromCart(item.productId));
+              setShowCheckout(false);
+            }}
+            className="w-full bg-[#ff5000] text-white py-3 rounded-full font-medium text-lg hover:bg-[#e64800] active:bg-[#cc4000] shadow-md"
+          >
+            提交
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-[#f5f5f9] relative">
@@ -206,6 +365,53 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
       {/* Cart Area (Always visible) */}
       <div className="flex-1 overflow-y-auto p-4 pb-40">
+        {cartItems.length > 0 && (
+          <div className="flex items-center justify-between mb-3 px-1">
+            <span className="text-sm text-gray-500">共 {cartItems.length} 件商品</span>
+            <div className="flex items-center gap-3 text-sm">
+              <button 
+                onClick={() => {
+                  if (sortBy === 'time') setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                  else { setSortBy('time'); setSortOrder('desc'); }
+                }}
+                className={cn("flex items-center gap-1", sortBy === 'time' ? "text-[#ff5000] font-medium" : "text-gray-500")}
+              >
+                选货时间
+                <div className="flex flex-col -space-y-[6px]">
+                  <ChevronUp size={12} className={cn(sortBy === 'time' && sortOrder === 'asc' ? "text-[#ff5000]" : "text-gray-300")} />
+                  <ChevronUp size={12} className={cn("rotate-180", sortBy === 'time' && sortOrder === 'desc' ? "text-[#ff5000]" : "text-gray-300")} />
+                </div>
+              </button>
+              <button 
+                onClick={() => {
+                  if (sortBy === 'price') setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                  else { setSortBy('price'); setSortOrder('desc'); }
+                }}
+                className={cn("flex items-center gap-1", sortBy === 'price' ? "text-[#ff5000] font-medium" : "text-gray-500")}
+              >
+                价格
+                <div className="flex flex-col -space-y-[6px]">
+                  <ChevronUp size={12} className={cn(sortBy === 'price' && sortOrder === 'asc' ? "text-[#ff5000]" : "text-gray-300")} />
+                  <ChevronUp size={12} className={cn("rotate-180", sortBy === 'price' && sortOrder === 'desc' ? "text-[#ff5000]" : "text-gray-300")} />
+                </div>
+              </button>
+              <button 
+                onClick={() => {
+                  if (sortBy === 'name') setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                  else { setSortBy('name'); setSortOrder('asc'); }
+                }}
+                className={cn("flex items-center gap-1", sortBy === 'name' ? "text-[#ff5000] font-medium" : "text-gray-500")}
+              >
+                货名
+                <div className="flex flex-col -space-y-[6px]">
+                  <ChevronUp size={12} className={cn(sortBy === 'name' && sortOrder === 'asc' ? "text-[#ff5000]" : "text-gray-300")} />
+                  <ChevronUp size={12} className={cn("rotate-180", sortBy === 'name' && sortOrder === 'desc' ? "text-[#ff5000]" : "text-gray-300")} />
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
         {cartItems.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-400">
             <ShoppingCart size={48} className="mb-4 opacity-20" />
@@ -214,7 +420,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           </div>
         ) : (
           <div className="bg-white rounded-xl p-3 shadow-sm">
-            {cartItems.map((item, index) => (
+            {sortedCartItems.map((item, index) => (
               <motion.div 
                 key={item.productId}
                 layout
@@ -320,7 +526,16 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                   总量{selectedTotalQuantity}
                 </div>
               </div>
-              <button className="bg-[#ff5000] text-white px-6 py-2 rounded-full font-medium text-sm hover:bg-[#e64800] active:bg-[#cc4000]">
+              <button 
+                onClick={() => {
+                  if (selectedCartItems.length === 0) {
+                    alert('请先选择商品');
+                    return;
+                  }
+                  setShowCheckout(true);
+                }}
+                className="bg-[#ff5000] text-white px-6 py-2 rounded-full font-medium text-sm hover:bg-[#e64800] active:bg-[#cc4000]"
+              >
                 下单
               </button>
             </div>
@@ -328,7 +543,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         )}
 
         {/* Input Field Area */}
-        <div className="p-4 pb-8 relative">
+        <div className="px-4 py-3 bg-white relative">
           {/* Suggestions Popup */}
           <AnimatePresence>
             {showSuggestions && (
@@ -394,22 +609,27 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 </>
               ) : (
                 <button
-                  onMouseDown={startRecording}
-                  onMouseUp={stopRecording}
-                  onMouseLeave={stopRecording}
-                  onTouchStart={startRecording}
-                  onTouchEnd={stopRecording}
-                  onTouchCancel={stopRecording}
+                  onClick={toggleRecording}
                   onContextMenu={(e) => e.preventDefault()}
                   className={cn(
                     "w-full h-10 rounded-full font-bold text-sm transition-all select-none",
                     isRecording ? "bg-gray-300 text-gray-800 shadow-inner" : "bg-gray-100 text-gray-800"
                   )}
                 >
-                  {isRecording ? "松开 结束" : "按住 说话"}
+                  {isRecording ? "点击 结束" : "点击 说话"}
                 </button>
               )}
             </div>
+
+            <button 
+              onClick={() => setShowChatHistory(true)}
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 text-gray-600 transition-all shrink-0 relative"
+            >
+              <MessageSquare size={18} />
+              {chatHistory.length > 0 && (
+                <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -421,10 +641,11 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm cursor-pointer"
+            onClick={toggleRecording}
           >
             <div className="bg-gray-800/90 rounded-3xl p-6 flex flex-col items-center max-w-[80%]">
-              <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 relative">
+              <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 relative hover:bg-blue-600 transition-colors">
                 <motion.div 
                   animate={{ scale: [1, 1.5, 1] }}
                   transition={{ repeat: Infinity, duration: 1.5 }}
@@ -432,9 +653,10 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 />
                 <Mic size={32} className="text-white relative z-10" />
               </div>
-              <p className="text-white font-medium text-center min-h-[24px]">
+              <p className="text-white font-medium text-center min-h-[24px] mb-2">
                 {transcript || "正在聆听..."}
               </p>
+              <p className="text-gray-400 text-xs">点击任意处结束</p>
             </div>
           </motion.div>
         )}
@@ -454,6 +676,88 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
               <X size={14} />
             </button>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Chat History Drawer */}
+      <AnimatePresence>
+        {showChatHistory && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowChatHistory(false)}
+              className="absolute inset-0 bg-black/40 z-40"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 left-0 right-0 h-[70%] bg-gray-50 rounded-t-3xl z-50 flex flex-col shadow-2xl"
+            >
+              <div className="flex items-center justify-between p-4 bg-white rounded-t-3xl border-b border-gray-100 shrink-0">
+                <h3 className="font-bold text-gray-800 text-lg">聊天历史</h3>
+                <button 
+                  onClick={() => setShowChatHistory(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              
+              <div 
+                className="flex-1 overflow-y-auto p-4 space-y-4"
+                ref={(el) => {
+                  if (el) {
+                    el.scrollTop = el.scrollHeight;
+                  }
+                }}
+              >
+                {chatHistory.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                    <MessageSquare size={48} className="mb-4 opacity-20" />
+                    <p>暂无聊天记录</p>
+                  </div>
+                ) : (
+                  chatHistory.map((msg) => (
+                    <div 
+                      key={msg.id} 
+                      className={cn(
+                        "flex w-full",
+                        msg.role === 'user' ? "justify-end" : "justify-start"
+                      )}
+                    >
+                      <div 
+                        className={cn(
+                          "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
+                          msg.role === 'user' 
+                            ? "bg-blue-500 text-white rounded-tr-sm" 
+                            : "bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm"
+                        )}
+                      >
+                        {msg.role === 'user' && msg.type === 'voice' && (
+                          <div className="flex items-center gap-1 mb-1 opacity-80 text-xs">
+                            <Mic size={12} /> 语音输入
+                          </div>
+                        )}
+                        <p className="leading-relaxed">{msg.content}</p>
+                        <div 
+                          className={cn(
+                            "text-[10px] mt-1 text-right",
+                            msg.role === 'user' ? "text-blue-100" : "text-gray-400"
+                          )}
+                        >
+                          {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
