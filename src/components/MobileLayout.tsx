@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { MessageCircle, Store, ShoppingCart, User, Sparkles } from 'lucide-react';
 import ShopPage from '../pages/ShopPage';
-import CartPage from '../pages/CartPage';
 import ChatPage from '../pages/ChatPage';
 import ProfilePage from '../pages/ProfilePage';
 import { CartProvider, useCart } from '../context/CartContext';

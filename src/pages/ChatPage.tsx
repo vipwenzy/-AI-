@@ -432,7 +432,7 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
   const [isProcessing, setIsProcessing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { items: cartItems, addToCart, updateQuantity, clearCart, totalItems } = useCart();
+  const { items: cartItems, addToCart, removeFromCart, updateQuantity, clearCart, totalItems } = useCart();
 
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
   const messages = activeSession.messages;
@@ -480,10 +480,11 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
         id: (Date.now() + 1).toString(),
         role: 'agent',
         type: 'text',
-        content: `已识别${type === 'handwritten' ? '手写单据' : '商品条码'}，添加了 10 箱${product.name}。`,
+        content: `已识别${type === 'handwritten' ? '手写单据' : '商品条码'}，已为您将 10 箱${product.name} 添加到购物车。`,
         timestamp: new Date()
       };
       updateMessages(prev => [...prev, replyMsg]);
+      setIsCartModalOpen(true);
     }, 1500);
   };
 
@@ -530,12 +531,49 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
       ));
     }
 
+    // Intent detection for cart visibility
+    const isRemoveIntent = /去掉|不要|删除|取消|减/.test(text);
+    const isAddIntent = /要|加|买|来|补货|下单|结算|特惠|爆款|优惠|活动|单子/.test(text);
+    const isCartRelated = isRemoveIntent || isAddIntent || text.includes('购物车');
+
+    if (!isCartRelated && isCartModalOpen) {
+      setIsCartModalOpen(false);
+    }
+
     setTimeout(() => {
       setIsProcessing(false);
       
       let replyMsg: Message;
 
-      if (text.includes('本周爆款') || text.includes('卖得好')) {
+      if (isRemoveIntent) {
+        // Try to find what to remove
+        const itemToRemove = cartItems.find(item => 
+          text.includes(item.product.name) || 
+          (item.product.name.includes('薯片') && text.includes('薯片')) ||
+          (item.product.name.includes('可乐') && text.includes('可乐')) ||
+          (item.product.name.includes('水') && text.includes('水')) ||
+          (item.product.name.includes('饼干') && text.includes('饼干'))
+        );
+
+        if (itemToRemove) {
+          removeFromCart(itemToRemove.productId);
+          replyMsg = {
+            id: (Date.now() + 1).toString(),
+            role: 'agent',
+            type: 'text',
+            content: `好的，已为您从购物车中移除【${itemToRemove.product.name}】。`,
+            timestamp: new Date()
+          };
+        } else {
+          replyMsg = {
+            id: (Date.now() + 1).toString(),
+            role: 'agent',
+            type: 'text',
+            content: `好的，已为您更新购物车。`,
+            timestamp: new Date()
+          };
+        }
+      } else if (text.includes('本周爆款') || text.includes('卖得好')) {
         const cola = MOCK_PRODUCTS.find(p => p.id === '1');
         const chips = MOCK_PRODUCTS.find(p => p.id === '3');
         const water = MOCK_PRODUCTS.find(p => p.id === '5');
@@ -818,6 +856,10 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
       }
       
       updateMessages(prev => [...prev, replyMsg]);
+      
+      if (replyMsg.content && replyMsg.content.includes('到购物车')) {
+        setIsCartModalOpen(true);
+      }
     }, 1000);
   };
 
@@ -892,8 +934,9 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
       <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-blue-50 to-transparent pointer-events-none"></div>
       <div className="absolute top-[-100px] right-[-100px] w-64 h-64 bg-purple-100 rounded-full blur-[100px] pointer-events-none"></div>
 
-      {/* Header */}
-      <div className="h-16 border-b border-gray-100 flex items-center justify-between px-5 shrink-0 z-20 backdrop-blur-xl bg-white/80 sticky top-0">
+      <div className="flex-1 relative flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="h-16 border-b border-gray-100 flex items-center justify-between px-5 shrink-0 z-20 backdrop-blur-xl bg-white/80 sticky top-0">
         {isEmbedded ? (
           <div className="w-full flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1012,198 +1055,219 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
         )}
       </AnimatePresence>
 
-      {/* AI Suggestions */}
-      <div className="px-5 py-4 flex gap-3 overflow-x-auto scrollbar-hide shrink-0 z-10">
-        {[
-          { icon: <Zap size={14} className="text-orange-600" />, label: '本周爆款', bg: 'bg-orange-50 border-orange-100 text-orange-700', action: '最近哪些货卖得好？' },
-          { icon: <Gift size={14} className="text-red-600" />, label: '限时特惠', bg: 'bg-red-50 border-red-100 text-red-700', action: '最近有什么优惠活动？' },
-          { icon: <RefreshCw size={14} className="text-blue-600" />, label: '常购清单', bg: 'bg-blue-50 border-blue-100 text-blue-700', action: '照以前的单子再来一车' },
-        ].map((chip, i) => (
-          <button 
-            key={i} 
-            onClick={() => handleSend(chip.action)}
-            className={cn(
-              "px-3 py-2 rounded-xl border flex items-center gap-2 text-xs font-medium whitespace-nowrap transition-all hover:scale-105 active:scale-95 shadow-sm",
-              chip.bg
-            )}
-          >
-            {chip.icon}
-            {chip.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-8 pb-28 scroll-smooth">
-        <div className="flex justify-center">
-          <span className="text-[10px] font-medium text-gray-400 bg-white px-3 py-1 rounded-full border border-gray-100 shadow-sm">
-            AI 会话已加密 • {activeSession.date.toLocaleDateString()}
-          </span>
+      {/* Main Content Area */}
+      <div className="flex-1 relative flex flex-col overflow-hidden">
+        {/* AI Suggestions */}
+        <div className="px-5 py-4 flex gap-3 overflow-x-auto scrollbar-hide shrink-0 z-10">
+          {[
+            { icon: <Zap size={14} className="text-orange-600" />, label: '本周爆款', bg: 'bg-orange-50 border-orange-100 text-orange-700', action: '最近哪些货卖得好？' },
+            { icon: <Gift size={14} className="text-red-600" />, label: '限时特惠', bg: 'bg-red-50 border-red-100 text-red-700', action: '最近有什么优惠活动？' },
+            { icon: <RefreshCw size={14} className="text-blue-600" />, label: '常购清单', bg: 'bg-blue-50 border-blue-100 text-blue-700', action: '照以前的单子再来一车' },
+          ].map((chip, i) => (
+            <button 
+              key={i} 
+              onClick={() => handleSend(chip.action)}
+              className={cn(
+                "px-3 py-2 rounded-xl border flex items-center gap-2 text-xs font-medium whitespace-nowrap transition-all hover:scale-105 active:scale-95 shadow-sm",
+                chip.bg
+              )}
+            >
+              {chip.icon}
+              {chip.label}
+            </button>
+          ))}
         </div>
-        
-        {messages.map((msg) => (
-          <motion.div 
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            key={msg.id} 
-            className={cn(
-              "flex gap-4 max-w-[90%]",
-              msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
-            )}
-          >
-            {msg.role === 'agent' && (
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-200 mt-1">
-                 <Sparkles size={18} className="text-white" />
-              </div>
-            )}
-            
-            <div className={cn("space-y-1.5", msg.role === 'user' ? "items-end flex flex-col" : "")}>
-              {msg.type === 'text' && (
-                <div className={cn(
-                  "px-5 py-3.5 text-[15px] leading-relaxed shadow-sm whitespace-pre-wrap border",
-                  msg.role === 'user' 
-                    ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm border-blue-600 shadow-blue-200" 
-                    : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border-gray-100"
-                )}>
-                  {msg.content}
-                </div>
-              )}
 
-              {msg.type === 'order-draft' && msg.data && (
-                <OrderDraftCard 
-                  items={msg.data.items} 
-                  onUpdateItem={(idx, prod) => updateDraftItem(msg.id, idx, prod)}
-                  onUpdateQuantity={(idx, delta) => updateDraftQuantity(msg.id, idx, delta)}
-                  onConfirm={() => confirmOrder(msg.id)}
-                  isConfirmed={msg.data.isConfirmed}
-                />
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-8 pb-28 scroll-smooth">
+          <div className="flex justify-center">
+            <span className="text-[10px] font-medium text-gray-400 bg-white px-3 py-1 rounded-full border border-gray-100 shadow-sm">
+              AI 会话已加密 • {activeSession.date.toLocaleDateString()}
+            </span>
+          </div>
+          
+          {messages.map((msg) => (
+            <motion.div 
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              key={msg.id} 
+              className={cn(
+                "flex gap-4 max-w-[90%]",
+                msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
               )}
-
-              {msg.type === 'order-image' && msg.data && (
-                <OrderImageCard 
-                  items={msg.data.items} 
-                  orderNo={msg.data.orderNo} 
-                />
-              )}
-
-              {msg.type === 'product-list' && msg.data?.products && (
-                <div className="mt-2">
-                  <ProductListCard 
-                    products={msg.data.products} 
-                    onAddToCart={(product) => addToCart(product, 1)} 
-                  />
-                </div>
-              )}
-
-              {msg.type === 'order-history' && msg.data?.order && (
-                <div className="mt-2">
-                  <OrderHistoryCard 
-                    order={msg.data.order} 
-                    onReorder={(items) => {
-                      items.forEach((item: any) => {
-                        const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
-                        if (product) {
-                          addToCart(product, item.quantity);
-                        }
-                      });
-                      setIsCartModalOpen(true);
-                    }}
-                    onViewDetails={onNavigate ? () => onNavigate(`profile:orders:${msg.data.order.orderNo}`) : undefined}
-                  />
-                </div>
-              )}
-
-              {msg.data?.warning && (
-                <div className="flex items-start gap-1.5 mt-2 bg-orange-50 text-orange-600 p-2.5 rounded-xl text-xs border border-orange-100 shadow-sm max-w-xs">
-                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                  <span className="leading-relaxed">{msg.data.warning}</span>
-                </div>
-              )}
-
-              {msg.data?.suggestions && (
-                <div className="flex flex-wrap gap-2 mt-2 max-w-xs">
-                  {msg.data.suggestions.map((s: string) => (
-                    <button 
-                      key={s}
-                      onClick={() => handleSend(s)} 
-                      className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full border border-blue-100 hover:bg-blue-100 hover:border-blue-200 transition-colors active:scale-95 shadow-sm font-medium"
-                    >
-                      {s}
-                    </button>
-                  ))}
+            >
+              {msg.role === 'agent' && (
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-200 mt-1">
+                   <Sparkles size={18} className="text-white" />
                 </div>
               )}
               
-              <div className={cn(
-                "text-[10px] text-gray-400 px-1 font-medium tracking-wide",
-                msg.role === 'user' ? "text-right" : "text-left"
-              )}>
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-          </motion.div>
-        ))}
+              <div className={cn("space-y-1.5", msg.role === 'user' ? "items-end flex flex-col" : "")}>
+                {msg.type === 'text' && (
+                  <div className={cn(
+                    "px-5 py-3.5 text-[15px] leading-relaxed shadow-sm whitespace-pre-wrap border",
+                    msg.role === 'user' 
+                      ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm border-blue-600 shadow-blue-200" 
+                      : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border-gray-100"
+                  )}>
+                    {msg.content}
+                  </div>
+                )}
 
-        {isProcessing && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex gap-4"
-          >
-             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-200 mt-1">
-                 <Sparkles size={18} className="text-white" />
-              </div>
-              <div className="bg-white rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-3 border border-gray-100 shadow-sm">
-                <span className="text-xs text-gray-500 font-medium tracking-wide">AI 正在思考</span>
-                <div className="flex gap-1.5">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                {msg.type === 'order-draft' && msg.data && (
+                  <OrderDraftCard 
+                    items={msg.data.items} 
+                    onUpdateItem={(idx, prod) => updateDraftItem(msg.id, idx, prod)}
+                    onUpdateQuantity={(idx, delta) => updateDraftQuantity(msg.id, idx, delta)}
+                    onConfirm={() => confirmOrder(msg.id)}
+                    isConfirmed={msg.data.isConfirmed}
+                  />
+                )}
+
+                {msg.type === 'order-image' && msg.data && (
+                  <OrderImageCard 
+                    items={msg.data.items} 
+                    orderNo={msg.data.orderNo} 
+                  />
+                )}
+
+                {msg.type === 'product-list' && msg.data?.products && (
+                  <div className="mt-2">
+                    <ProductListCard 
+                      products={msg.data.products} 
+                      onAddToCart={(product) => addToCart(product, 1)} 
+                    />
+                  </div>
+                )}
+
+                {msg.type === 'order-history' && msg.data?.order && (
+                  <div className="mt-2">
+                    <OrderHistoryCard 
+                      order={msg.data.order} 
+                      onReorder={(items) => {
+                        items.forEach((item: any) => {
+                          const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+                          if (product) {
+                            addToCart(product, item.quantity);
+                          }
+                        });
+                        setIsCartModalOpen(true);
+                      }}
+                      onViewDetails={onNavigate ? () => onNavigate(`profile:orders:${msg.data.order.orderNo}`) : undefined}
+                    />
+                  </div>
+                )}
+
+                {msg.data?.warning && (
+                  <div className="flex items-start gap-1.5 mt-2 bg-orange-50 text-orange-600 p-2.5 rounded-xl text-xs border border-orange-100 shadow-sm max-w-xs">
+                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{msg.data.warning}</span>
+                  </div>
+                )}
+
+                {msg.data?.suggestions && (
+                  <div className="flex flex-wrap gap-2 mt-2 max-w-xs">
+                    {msg.data.suggestions.map((s: string) => (
+                      <button 
+                        key={s}
+                        onClick={() => handleSend(s)} 
+                        className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full border border-blue-100 hover:bg-blue-100 hover:border-blue-200 transition-colors active:scale-95 shadow-sm font-medium"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                <div className={cn(
+                  "text-[10px] text-gray-400 px-1 font-medium tracking-wide",
+                  msg.role === 'user' ? "text-right" : "text-left"
+                )}>
+                  {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
-          </motion.div>
-        )}
-        <div ref={messagesEndRef} />
+            </motion.div>
+          ))}
+
+          {isProcessing && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex gap-4"
+            >
+               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-200 mt-1">
+                   <Sparkles size={18} className="text-white" />
+                </div>
+                <div className="bg-white rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-3 border border-gray-100 shadow-sm">
+                  <span className="text-xs text-gray-500 font-medium tracking-wide">AI 正在思考</span>
+                  <div className="flex gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+            </motion.div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Voice Recording Overlay - Light Mode */}
+        <AnimatePresence>
+          {isRecording && (
+            <motion.div 
+              initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+              animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+              exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+              className="absolute inset-0 bg-white/60 z-60 flex flex-col items-center justify-center"
+            >
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-8 relative shadow-2xl shadow-blue-500/30 border-4 border-white">
+                   <div className="absolute inset-0 bg-white/20 rounded-full animate-ping opacity-50"></div>
+                   <Mic size={32} className="text-white relative z-10" />
+                </div>
+              </div>
+              
+              <h3 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">正在聆听...</h3>
+              <p className="text-gray-500 text-sm font-medium">AI 语音引擎已激活</p>
+              
+              <div className="mt-12 flex gap-1.5 items-center h-12">
+                {[...Array(12)].map((_, i) => (
+                  <motion.div 
+                    key={i}
+                    animate={{ height: [10, 40, 10], opacity: [0.3, 1, 0.3] }}
+                    transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.08, ease: "easeInOut" }}
+                    className="w-1.5 bg-gradient-to-t from-blue-500 to-cyan-400 rounded-full shadow-sm"
+                  />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Voice Recording Overlay - Light Mode */}
-      <AnimatePresence>
-        {isRecording && (
-          <motion.div 
-            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
-            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            className="absolute inset-0 bg-white/60 z-40 flex flex-col items-center justify-center"
-          >
-            <div className="relative">
-              <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-8 relative shadow-2xl shadow-blue-500/30 border-4 border-white">
-                 <div className="absolute inset-0 bg-white/20 rounded-full animate-ping opacity-50"></div>
-                 <Mic size={32} className="text-white relative z-10" />
+      {/* Cart Modal - Full Screen */}
+        <AnimatePresence>
+          {isCartModalOpen && (
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute inset-0 z-[100] bg-white flex flex-col overflow-hidden"
+            >
+              <div className="flex-1 overflow-hidden relative">
+                <CartPage onClose={() => setIsCartModalOpen(false)} />
               </div>
-            </div>
-            
-            <h3 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">正在聆听...</h3>
-            <p className="text-gray-500 text-sm font-medium">AI 语音引擎已激活</p>
-            
-            <div className="mt-12 flex gap-1.5 items-center h-12">
-              {[...Array(12)].map((_, i) => (
-                <motion.div 
-                  key={i}
-                  animate={{ height: [10, 40, 10], opacity: [0.3, 1, 0.3] }}
-                  transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.08, ease: "easeInOut" }}
-                  className="w-1.5 bg-gradient-to-t from-blue-500 to-cyan-400 rounded-full shadow-sm"
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Floating Cart Button - Persistent */}
       <AnimatePresence>
-        {!isEmbedded && (
+        {!isCartModalOpen && (
           <motion.button
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -1316,23 +1380,6 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
                    <RefreshCw size={20} />
                  </div>
                </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Cart Modal */}
-      <AnimatePresence>
-        {isCartModalOpen && (
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute inset-0 z-50 bg-white flex flex-col"
-          >
-            <div className="flex-1 overflow-hidden relative">
-              <CartPage onClose={() => setIsCartModalOpen(false)} />
             </div>
           </motion.div>
         )}
