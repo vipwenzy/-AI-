@@ -29,6 +29,36 @@ const OrderStatusBadge = ({ status }: { status: OrderStatus }) => {
   );
 };
 
+const MOCK_ORDERS = [
+  { 
+    id: 'SO-20240226-001', 
+    date: '2024-02-26 10:00', 
+    total: 3550.00, 
+    status: 'pending', 
+    items: 2,
+    orderItems: [
+      { name: '可口可乐 330ml 罐装', price: 45.00, quantity: 50, unit: '箱', image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=100&q=80' },
+      { name: '乐事原味薯片', price: 65.00, quantity: 20, unit: '盒', image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=100&q=80' }
+    ]
+  },
+  { 
+    id: 'SO-20240225-001', 
+    date: '2024-02-25 14:30', 
+    total: 3540.00, 
+    status: 'accepted', 
+    items: 3,
+    orderItems: [
+      { name: '农夫山泉矿泉水', price: 28.00, quantity: 100, unit: '箱', image: 'https://images.unsplash.com/photo-1616118132534-381148898bb4?w=100&q=80' },
+      { name: '百事可乐 330ml 罐装', price: 44.00, quantity: 10, unit: '箱', image: 'https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=100&q=80' },
+      { name: '奥利奥原味饼干', price: 85.00, quantity: 5, unit: '箱', image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=100&q=80' }
+    ]
+  },
+  { id: 'SO-20240224-089', date: '2024-02-24 09:15', total: 12800.50, status: 'shipped', items: 12, orderItems: [] },
+  { id: 'SO-20240222-112', date: '2024-02-22 16:45', total: 560.00, status: 'completed', items: 2, orderItems: [] },
+  { id: 'SO-20240220-055', date: '2024-02-20 11:20', total: 2100.00, status: 'cancelled', items: 5, orderItems: [] },
+  { id: 'SO-20240218-033', date: '2024-02-18 10:00', total: 4500.00, status: 'completed', items: 8, orderItems: [] },
+];
+
 export default function OrdersPage({ onBack, initialOrderId }: { onBack?: () => void, initialOrderId?: string }) {
   const [activeTab, setActiveTab] = useState('全部');
   const [selectedOrder, setSelectedOrder] = useState<string | null>(initialOrderId || null);
@@ -38,39 +68,9 @@ export default function OrdersPage({ onBack, initialOrderId }: { onBack?: () => 
     { name: '乐事原味薯片', price: 65.00, quantity: 20, unit: '盒', image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=100&q=80' }
   ]);
 
-  const orders = [
-    { 
-      id: 'SO-20240226-001', 
-      date: '2024-02-26 10:00', 
-      total: 3550.00, 
-      status: 'pending', 
-      items: 2,
-      orderItems: [
-        { name: '可口可乐 330ml 罐装', price: 45.00, quantity: 50, unit: '箱', image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=100&q=80' },
-        { name: '乐事原味薯片', price: 65.00, quantity: 20, unit: '盒', image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=100&q=80' }
-      ]
-    },
-    { 
-      id: 'SO-20240225-001', 
-      date: '2024-02-25 14:30', 
-      total: 3540.00, 
-      status: 'accepted', 
-      items: 3,
-      orderItems: [
-        { name: '农夫山泉矿泉水', price: 28.00, quantity: 100, unit: '箱', image: 'https://images.unsplash.com/photo-1616118132534-381148898bb4?w=100&q=80' },
-        { name: '百事可乐 330ml 罐装', price: 44.00, quantity: 10, unit: '箱', image: 'https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=100&q=80' },
-        { name: '奥利奥原味饼干', price: 85.00, quantity: 5, unit: '箱', image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=100&q=80' }
-      ]
-    },
-    { id: 'SO-20240224-089', date: '2024-02-24 09:15', total: 12800.50, status: 'shipped', items: 12, orderItems: [] },
-    { id: 'SO-20240222-112', date: '2024-02-22 16:45', total: 560.00, status: 'completed', items: 2, orderItems: [] },
-    { id: 'SO-20240220-055', date: '2024-02-20 11:20', total: 2100.00, status: 'cancelled', items: 5, orderItems: [] },
-    { id: 'SO-20240218-033', date: '2024-02-18 10:00', total: 4500.00, status: 'completed', items: 8, orderItems: [] },
-  ];
-
   const filteredOrders = activeTab === '全部' 
-    ? orders 
-    : orders.filter(o => {
+    ? MOCK_ORDERS 
+    : MOCK_ORDERS.filter(o => {
         if (activeTab === '待接单') return o.status === 'pending';
         if (activeTab === '已接单') return o.status === 'accepted';
         if (activeTab === '待收货') return o.status === 'shipped';
@@ -85,7 +85,7 @@ export default function OrdersPage({ onBack, initialOrderId }: { onBack?: () => 
     });
   };
 
-  const currentOrder = orders.find(o => o.id === selectedOrder);
+  const currentOrder = MOCK_ORDERS.find(o => o.id === selectedOrder);
 
   // Initialize edit items when order is selected
   React.useEffect(() => {
