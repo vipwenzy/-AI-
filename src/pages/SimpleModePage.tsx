@@ -1,0 +1,461 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, X, ShoppingCart, Keyboard, Check, Search } from 'lucide-react';
+import { useCart } from '../context/CartContext';
+import { MOCK_PRODUCTS } from '../data/mockDb';
+import { cn } from '../lib/utils';
+
+interface SimpleModePageProps {
+  onSwitchMode: () => void;
+}
+
+const SUGGESTIONS = [
+  "来10箱可口可乐",
+  "把农夫山泉改成5箱",
+  "去掉百事可乐",
+  "奥利奥和雪碧各来5箱"
+];
+
+export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
+  const { items: cartItems, updateQuantity, removeFromCart, addToCart, totalAmount } = useCart();
+  const [inputValue, setInputValue] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [inputType, setInputType] = useState<'text' | 'voice'>('text');
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const [unselectedIds, setUnselectedIds] = useState<Set<string>>(new Set());
+  const recognitionRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const toggleSelection = (productId: string) => {
+    const newSet = new Set(unselectedIds);
+    if (newSet.has(productId)) {
+      newSet.delete(productId);
+    } else {
+      newSet.add(productId);
+    }
+    setUnselectedIds(newSet);
+  };
+
+  const toggleAll = () => {
+    if (unselectedIds.size > 0) {
+      setUnselectedIds(new Set());
+    } else {
+      setUnselectedIds(new Set(cartItems.map(i => i.productId)));
+    }
+  };
+
+  const isAllSelected = cartItems.length > 0 && unselectedIds.size === 0;
+  const selectedCartItems = cartItems.filter(i => !unselectedIds.has(i.productId));
+  const selectedTotalAmount = selectedCartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const selectedTotalQuantity = selectedCartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'zh-CN';
+
+      recognitionRef.current.onresult = (event: any) => {
+        let currentTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          currentTranscript += event.results[i][0].transcript;
+        }
+        setTranscript(currentTranscript);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error);
+        if (event.error === 'not-allowed') {
+          setSpeechError('请允许使用麦克风以进行语音输入');
+        } else {
+          setSpeechError('语音识别出错，请重试');
+        }
+        setIsRecording(false);
+      };
+    } else {
+      setSpeechError('您的浏览器不支持语音识别');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (speechError) {
+      const timer = setTimeout(() => {
+        setSpeechError(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [speechError]);
+
+  const startRecording = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    setSpeechError(null);
+    
+    try {
+      // Explicitly request microphone permission first to trigger the browser prompt
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the tracks immediately since we only need the permission for SpeechRecognition
+      stream.getTracks().forEach(track => track.stop());
+      
+      setIsRecording(true);
+      setTranscript('');
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.error('Microphone permission denied', err);
+      setSpeechError('请允许使用麦克风以进行语音输入');
+    }
+  };
+
+  const stopRecording = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    setIsRecording(false);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    if (transcript) {
+      processInput(transcript);
+      setTranscript('');
+    }
+  };
+
+  // Simple intent parser
+  const processInput = (text: string) => {
+    const isRemove = /去掉|不要|删除|取消|减/.test(text);
+    const isModify = /改成|修改为|变成/.test(text);
+    
+    // Find mentioned products
+    MOCK_PRODUCTS.forEach(product => {
+      // Very basic keyword matching
+      const keyword = product.name.replace(/ /g, '').slice(0, 4); // basic matching
+      const shortName = product.name.split(' ')[0];
+      if (text.includes(keyword) || text.includes(shortName)) {
+        if (isRemove) {
+          removeFromCart(product.id);
+        } else {
+          // Try to extract quantity
+          const match = text.match(new RegExp(`(?:${keyword}|${shortName}).*?(\\d+)`));
+          const matchBefore = text.match(new RegExp(`(\\d+).*?(?:${keyword}|${shortName})`));
+          
+          let qty = 1;
+          if (match && match[1]) qty = parseInt(match[1], 10);
+          else if (matchBefore && matchBefore[1]) qty = parseInt(matchBefore[1], 10);
+          else if (text.includes('各来5') || text.includes('各加5')) qty = 5;
+          else if (text.includes('各来10') || text.includes('各加10')) qty = 10;
+          
+          if (isModify) {
+            const item = cartItems.find(i => i.productId === product.id);
+            if (item) {
+              updateQuantity(product.id, qty - item.quantity);
+            } else {
+              addToCart(product, qty);
+            }
+          } else {
+            addToCart(product, qty);
+          }
+        }
+      }
+    });
+  };
+
+  const handleSend = () => {
+    if (!inputValue.trim()) return;
+    processInput(inputValue);
+    setInputValue('');
+    setShowSuggestions(false);
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setInputValue(suggestion);
+    processInput(suggestion);
+    setInputValue('');
+    setShowSuggestions(false);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[#f5f5f9] relative">
+      {/* Header */}
+      <div className="h-14 bg-[#f5f5f9] border-b border-gray-200 flex items-center justify-between px-4 shrink-0 z-10">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-gray-800 text-lg">购物车</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <button className="text-sm text-gray-600 flex items-center gap-1">
+            <Search size={16} /> 搜索
+          </button>
+          <button 
+            onClick={() => cartItems.forEach(item => removeFromCart(item.productId))}
+            className="text-sm text-blue-600"
+          >
+            清空
+          </button>
+          <button 
+            onClick={onSwitchMode}
+            className="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-50 transition-colors ml-2"
+          >
+            高级模式
+          </button>
+        </div>
+      </div>
+
+      {/* Cart Area (Always visible) */}
+      <div className="flex-1 overflow-y-auto p-4 pb-40">
+        {cartItems.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-gray-400">
+            <ShoppingCart size={48} className="mb-4 opacity-20" />
+            <p>购物车是空的</p>
+            <p className="text-xs mt-2">试试说："来10箱可乐"</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl p-3 shadow-sm">
+            {cartItems.map((item, index) => (
+              <motion.div 
+                key={item.productId}
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className={cn(
+                  "flex items-center gap-3 py-4 border-b border-gray-100",
+                  index === cartItems.length - 1 ? "border-0 pb-2" : ""
+                )}
+              >
+                {/* Checkbox */}
+                <button 
+                  onClick={() => toggleSelection(item.productId)}
+                  className={cn(
+                    "w-5 h-5 rounded-full flex items-center justify-center shrink-0 border",
+                    !unselectedIds.has(item.productId) 
+                      ? "bg-[#ff5000] border-[#ff5000] text-white" 
+                      : "border-gray-300 bg-white"
+                  )}
+                >
+                  {!unselectedIds.has(item.productId) && <Check size={14} strokeWidth={3} />}
+                </button>
+
+                {/* Image */}
+                <img src={item.product.image} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100 shrink-0" />
+
+                {/* Content */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between h-20">
+                  <div>
+                    <h3 className="font-medium text-gray-900 text-sm leading-tight line-clamp-2">
+                      <span className="bg-blue-400 text-white text-[10px] px-1 rounded mr-1 align-middle">新</span>
+                      <span className="align-middle">{item.product.name}</span>
+                    </h3>
+                    <div className="text-xs text-gray-400 mt-1 truncate">
+                      {item.product.sku || '默认规格'} | 库存{Math.floor(Math.random() * 100) + 20}个
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-end">
+                    <div className="text-[#ff5000] font-bold text-base">
+                      ¥{item.product.price}<span className="text-xs font-normal text-gray-500">/个</span>
+                    </div>
+                    
+                    {/* Quantity Control */}
+                    <div className="flex items-center border border-gray-200 rounded overflow-hidden">
+                      <button 
+                        onClick={() => updateQuantity(item.productId, -1)}
+                        className="w-7 h-6 flex items-center justify-center bg-gray-50 text-gray-600 hover:bg-gray-100 active:bg-gray-200"
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span className="w-8 text-center text-xs font-medium border-x border-gray-200 bg-white leading-6">
+                        {item.quantity}
+                      </span>
+                      <button 
+                        onClick={() => updateQuantity(item.productId, 1)}
+                        className="w-7 h-6 flex items-center justify-center bg-[#ff5000] text-white hover:bg-[#e64800] active:bg-[#cc4000]"
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+            <div className="text-center text-xs text-gray-400 mt-4 mb-2 flex items-center justify-center gap-2">
+              <div className="h-px bg-gray-200 w-12"></div>
+              已经到底啦
+              <div className="h-px bg-gray-200 w-12"></div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Input Area */}
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-0 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
+        
+        {/* Order Summary Bar */}
+        {cartItems.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={toggleAll}
+                className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center shrink-0 border",
+                  isAllSelected 
+                    ? "bg-[#ff5000] border-[#ff5000] text-white" 
+                    : "border-gray-300 bg-white"
+                )}
+              >
+                {isAllSelected && <Check size={14} strokeWidth={3} />}
+              </button>
+              <span className="text-sm text-gray-700">已选({selectedCartItems.length})</span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end">
+                <div className="text-sm">
+                  总额: <span className="font-bold text-lg text-gray-900">{selectedTotalAmount.toFixed(2)}</span>
+                </div>
+                <div className="text-xs text-gray-400">
+                  总量{selectedTotalQuantity}
+                </div>
+              </div>
+              <button className="bg-[#ff5000] text-white px-6 py-2 rounded-full font-medium text-sm hover:bg-[#e64800] active:bg-[#cc4000]">
+                下单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Input Field Area */}
+        <div className="p-4 pb-8 relative">
+          {/* Suggestions Popup */}
+          <AnimatePresence>
+            {showSuggestions && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden"
+              >
+                <div className="p-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+                  <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                    <Sparkles size={12} /> 试试这样说
+                  </span>
+                  <button onClick={() => setShowSuggestions(false)} className="text-blue-400 hover:text-blue-600">
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="p-2 flex flex-col gap-1">
+                  {SUGGESTIONS.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSuggestionClick(s)}
+                      className="text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    >
+                      "{s}"
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Input Field */}
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setInputType(inputType === 'text' ? 'voice' : 'text')}
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 text-gray-600 transition-all shrink-0"
+            >
+              {inputType === 'text' ? <Mic size={18} /> : <Keyboard size={18} />}
+            </button>
+            
+            <div className="flex-1 relative">
+              {inputType === 'text' ? (
+                <>
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onFocus={() => setShowSuggestions(true)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                    placeholder="输入商品名称或指令..."
+                    className="w-full h-10 bg-gray-100 rounded-full pl-4 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                  />
+                  {inputValue && (
+                    <button 
+                      onClick={handleSend}
+                      className="absolute right-1 top-1 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center"
+                    >
+                      <Send size={14} className="ml-0.5" />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  onMouseDown={startRecording}
+                  onMouseUp={stopRecording}
+                  onMouseLeave={stopRecording}
+                  onTouchStart={startRecording}
+                  onTouchEnd={stopRecording}
+                  onTouchCancel={stopRecording}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={cn(
+                    "w-full h-10 rounded-full font-bold text-sm transition-all select-none",
+                    isRecording ? "bg-gray-300 text-gray-800 shadow-inner" : "bg-gray-100 text-gray-800"
+                  )}
+                >
+                  {isRecording ? "松开 结束" : "按住 说话"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recording Overlay */}
+      <AnimatePresence>
+        {isRecording && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm"
+          >
+            <div className="bg-gray-800/90 rounded-3xl p-6 flex flex-col items-center max-w-[80%]">
+              <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 relative">
+                <motion.div 
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  className="absolute inset-0 bg-blue-500 rounded-full opacity-30"
+                />
+                <Mic size={32} className="text-white relative z-10" />
+              </div>
+              <p className="text-white font-medium text-center min-h-[24px]">
+                {transcript || "正在聆听..."}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Error Toast */}
+      <AnimatePresence>
+        {speechError && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-20 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full shadow-lg text-sm font-medium z-50 flex items-center gap-2"
+          >
+            <span>{speechError}</span>
+            <button onClick={() => setSpeechError(null)} className="opacity-80 hover:opacity-100">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

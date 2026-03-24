@@ -4,6 +4,7 @@ import { MessageCircle, Store, ShoppingCart, User, Sparkles } from 'lucide-react
 import ShopPage from '../pages/ShopPage';
 import ChatPage from '../pages/ChatPage';
 import ProfilePage from '../pages/ProfilePage';
+import SimpleModePage from '../pages/SimpleModePage';
 import { CartProvider, useCart } from '../context/CartContext';
 
 interface LayoutProps {
@@ -21,7 +22,8 @@ const CartBadge = () => {
 };
 
 export function MobileLayout({ children }: LayoutProps) {
-  const [activeTab, setActiveTab] = useState<string>('shop');
+  const [activeTab, setActiveTab] = useState<string>('chat'); // Default to chat tab
+  const [isSimpleMode, setIsSimpleMode] = useState<boolean>(true); // Default to simple mode
 
   const currentTab = activeTab.split(':')[0];
 
@@ -53,7 +55,13 @@ export function MobileLayout({ children }: LayoutProps) {
           {/* Main Content Area */}
           <div className="flex-1 overflow-hidden relative bg-white flex flex-col">
             {currentTab === 'shop' && <ShopPage />}
-            {currentTab === 'chat' && <ChatPage onNavigate={setActiveTab} />}
+            {currentTab === 'chat' && (
+              isSimpleMode ? (
+                <SimpleModePage onSwitchMode={() => setIsSimpleMode(false)} />
+              ) : (
+                <ChatPage onNavigate={setActiveTab} onSwitchMode={() => setIsSimpleMode(true)} />
+              )
+            )}
             {currentTab === 'profile' && <ProfilePage initialRoute={activeTab.split(':').slice(1).join(':')} />}
           </div>
 

@@ -496,7 +496,7 @@ const OrderHistoryCard = ({ order, onReorder, onViewDetails }: { order: any, onR
 
 const INITIAL_MESSAGE = '李老板下午好，我是广州兴盛批发部的 AI 开单助手！\n\n您可以这样使用我：\n🎤 按住底部麦克风，直接说："来50箱可乐"\n📸 点击左下角相机，拍下您的手写缺货单\n⌨️ 在下方输入框打字："查一下昨天的订单"\n\n请问今天需要点什么？您可以直接点击下方建议，或对我说：';
 
-export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmbedded?: boolean, onCollapse?: () => void, onNavigate?: (tab: any) => void }) {
+export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchMode }: { isEmbedded?: boolean, onCollapse?: () => void, onNavigate?: (tab: any) => void, onSwitchMode?: () => void }) {
   const [sessions, setSessions] = useState<ChatSession[]>([
     {
       id: '1',
@@ -1067,10 +1067,13 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
                   <h1 className="font-bold text-gray-900 text-[15px] leading-none tracking-tight">广州兴盛批发部</h1>
                   <div className="px-1.5 py-0.5 rounded bg-blue-50 text-[10px] font-medium text-blue-600 border border-blue-100">PRO</div>
                 </div>
-                <span className="text-[11px] text-gray-500 leading-tight mt-1 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  AI 引擎运行中
-                </span>
+                <button 
+                  onClick={onSwitchMode}
+                  className="text-[11px] text-blue-500 hover:text-blue-600 leading-tight mt-1 flex items-center gap-1 font-medium bg-blue-50 px-2 py-0.5 rounded-full w-fit"
+                >
+                  <Sparkles size={10} />
+                  切换简易模式
+                </button>
               </div>
             </div>
             <div className="flex items-center gap-3">
