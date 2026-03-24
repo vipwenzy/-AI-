@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Check, X, Sparkles, RefreshCw, ArrowRight, Minus, Plus, ChevronDown, MoreHorizontal, Search, Bell, Zap, BarChart3, Box, Trash2, PlusCircle, History, MessageSquare, Camera, ScanLine, PenTool, ShoppingCart, Gift, AlertCircle, Share2, ShoppingBag } from 'lucide-react';
+import { Mic, Send, Check, X, Sparkles, RefreshCw, ArrowRight, Minus, Plus, ChevronDown, MoreHorizontal, Search, Bell, Zap, BarChart3, Box, Trash2, PlusCircle, History, MessageSquare, Camera, ScanLine, PenTool, ShoppingCart, Gift, AlertCircle, Share2, ShoppingBag, TrendingUp } from 'lucide-react';
 import { MOCK_PRODUCTS, Product, Message, OrderItem } from '../data/mockDb';
 import { cn } from '../lib/utils';
 import { useCart } from '../context/CartContext';
@@ -289,8 +289,21 @@ const OrderImageCard = ({ items, orderNo }: { items: OrderItem[], orderNo: strin
   );
 };
 
-const ProductListCard = ({ products, onAddToCart }: { products: Product[], onAddToCart: (product: Product) => void }) => {
+const ProductListCard = ({ 
+  products, 
+  onAddToCart,
+  title = "本周爆款推荐",
+  isRanking = false,
+  isDiscount = false
+}: { 
+  products: Product[], 
+  onAddToCart: (product: Product) => void,
+  title?: string,
+  isRanking?: boolean,
+  isDiscount?: boolean
+}) => {
   const [addedItems, setAddedItems] = useState<Record<string, boolean>>({});
+  const [activeCategory, setActiveCategory] = useState('全部');
 
   const handleAdd = (product: Product) => {
     onAddToCart(product);
@@ -300,23 +313,98 @@ const ProductListCard = ({ products, onAddToCart }: { products: Product[], onAdd
     }, 1000);
   };
 
+  // Filter and sort products for ranking or discount
+  let displayProducts = products;
+  
+  if (isRanking) {
+    displayProducts = products
+      .filter(p => activeCategory === '全部' || p.category === activeCategory)
+      .sort((a, b) => b.inventory - a.inventory)
+      .slice(0, 5); // Show top 5
+  } else if (isDiscount) {
+    displayProducts = products
+      .filter(p => p.originalPrice && p.originalPrice > p.price)
+      .filter(p => activeCategory === '全部' || p.category === activeCategory);
+  }
+
+  const categories = ['全部', '饮料', '零食'];
+  const showCategories = isRanking || isDiscount;
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden w-full max-w-[280px]">
-      <div className="bg-gradient-to-r from-orange-500 to-red-500 p-3 text-white flex items-center gap-2">
-        <Zap size={18} className="text-yellow-200" />
-        <span className="font-bold text-sm">本周爆款推荐</span>
+      <div className={cn(
+        "p-3 text-white flex items-center gap-2",
+        isRanking ? "bg-gradient-to-r from-red-500 to-orange-500" : 
+        isDiscount ? "bg-gradient-to-r from-pink-500 to-rose-500" : 
+        "bg-gradient-to-r from-orange-500 to-red-500"
+      )}>
+        {isRanking ? <TrendingUp size={18} className="text-yellow-200" /> : 
+         isDiscount ? <Gift size={18} className="text-pink-200" /> : 
+         <Zap size={18} className="text-yellow-200" />}
+        <span className="font-bold text-sm">{title}</span>
       </div>
+      
+      {showCategories && (
+        <div className="flex px-2 pt-2 gap-2 overflow-x-auto no-scrollbar border-b border-gray-50">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={cn(
+                "px-3 py-1.5 text-xs font-medium rounded-t-lg transition-colors whitespace-nowrap",
+                activeCategory === cat 
+                  ? (isDiscount ? "text-pink-600 bg-pink-50 border-b-2 border-pink-500" : "text-red-600 bg-red-50 border-b-2 border-red-500")
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="divide-y divide-gray-50">
-        {products.map((product, index) => (
-          <div key={product.id} className="p-3 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden shrink-0">
+        {displayProducts.map((product, index) => (
+          <div key={product.id} className="p-3 flex items-center gap-3 relative">
+            <div className="w-14 h-14 rounded-lg bg-gray-50 overflow-hidden shrink-0 relative">
+              {isRanking && (
+                <div className={cn(
+                  "absolute top-0 left-0 w-5 h-5 rounded-br-lg flex items-center justify-center text-[10px] font-bold z-10 text-white",
+                  index === 0 ? "bg-red-500" : index === 1 ? "bg-orange-500" : index === 2 ? "bg-yellow-500" : "bg-gray-400"
+                )}>
+                  {index + 1}
+                </div>
+              )}
+              {isDiscount && product.originalPrice && (
+                <div className="absolute top-0 left-0 px-1.5 py-0.5 bg-pink-500 rounded-br-lg flex items-center justify-center text-[9px] font-bold z-10 text-white">
+                  {((product.price / product.originalPrice) * 10).toFixed(1)}折
+                </div>
+              )}
               <img src={product.image} alt={product.name} className="w-full h-full object-cover mix-blend-multiply" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                <span className="text-orange-600 font-bold font-mono">¥{product.price}</span> / {product.unit}
-              </div>
+              {isRanking ? (
+                <div className="flex flex-col mt-0.5">
+                  <span className="text-xs text-gray-500">月销 {(product.inventory * 12.5).toFixed(0)}件</span>
+                  <div className="text-xs mt-0.5">
+                    <span className="text-red-600 font-bold font-mono text-sm">¥{product.price}</span> 
+                    <span className="text-gray-400 ml-1">/{product.unit}</span>
+                  </div>
+                </div>
+              ) : isDiscount && product.originalPrice ? (
+                <div className="flex flex-col mt-0.5">
+                  <div className="text-[10px] text-gray-400 line-through">¥{product.originalPrice.toFixed(2)}</div>
+                  <div className="text-xs">
+                    <span className="text-pink-600 font-bold font-mono text-sm">¥{product.price}</span> 
+                    <span className="text-gray-400 ml-1">/{product.unit}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-gray-500 mt-0.5">
+                  <span className="text-orange-600 font-bold font-mono">¥{product.price}</span> / {product.unit}
+                </div>
+              )}
             </div>
             <button 
               onClick={() => handleAdd(product)}
@@ -331,6 +419,11 @@ const ProductListCard = ({ products, onAddToCart }: { products: Product[], onAdd
             </button>
           </div>
         ))}
+        {displayProducts.length === 0 && (
+          <div className="p-6 text-center text-gray-400 text-xs">
+            暂无相关商品
+          </div>
+        )}
       </div>
     </div>
   );
@@ -574,10 +667,8 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
           };
         }
       } else if (text.includes('本周爆款') || text.includes('卖得好')) {
-        const cola = MOCK_PRODUCTS.find(p => p.id === '1');
-        const chips = MOCK_PRODUCTS.find(p => p.id === '3');
-        const water = MOCK_PRODUCTS.find(p => p.id === '5');
-        const products = [cola, chips, water].filter(Boolean) as Product[];
+        // Pass all products to let the component handle ranking and categories
+        const products = MOCK_PRODUCTS;
 
         replyMsg = {
           id: (Date.now() + 1).toString(),
@@ -586,13 +677,14 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
           content: '为您推荐本周销量最高的商品，您可以直接点击添加：',
           timestamp: new Date(),
           data: {
-            products: products
+            products: products,
+            isRanking: true,
+            title: "本周爆款推荐"
           }
         };
       } else if (text.includes('限时特惠') || text.includes('优惠') || text.includes('活动')) {
-        const pepsi = MOCK_PRODUCTS.find(p => p.id === '2');
-        const oreo = MOCK_PRODUCTS.find(p => p.id === '6');
-        const products = [pepsi, oreo].filter(Boolean) as Product[];
+        // Pass all products to let the component handle discount filtering and categories
+        const products = MOCK_PRODUCTS;
 
         replyMsg = {
           id: (Date.now() + 1).toString(),
@@ -602,6 +694,8 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
           timestamp: new Date(),
           data: {
             products: products,
+            isDiscount: true,
+            title: "限时特惠",
             suggestions: ['帮我把这两款各加10箱', '还有其他优惠吗？']
           }
         };
@@ -619,19 +713,19 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
           timestamp: new Date()
         };
       } else if (text.includes('其他优惠') || text.includes('还有其他')) {
-        const water = MOCK_PRODUCTS.find(p => p.id === '5');
-        const chips = MOCK_PRODUCTS.find(p => p.id === '4');
-        const products = [water, chips].filter(Boolean) as Product[];
+        const products = MOCK_PRODUCTS;
 
         replyMsg = {
           id: (Date.now() + 1).toString(),
           role: 'agent',
           type: 'product-list',
-          content: '当然，农夫山泉和乐事香辣味薯片目前也有满减活动，非常适合搭配进货：',
+          content: '目前所有的优惠商品都在这里了，您可以按分类查看：',
           timestamp: new Date(),
           data: {
             products: products,
-            suggestions: ['帮我把这两款各加5箱']
+            isDiscount: true,
+            title: "限时特惠",
+            suggestions: ['帮我把百事可乐和奥利奥各加10箱']
           }
         };
       } else if (text.includes('各加5箱') || text.includes('这两款各加5')) {
@@ -1137,6 +1231,9 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate }: { isEmb
                     <ProductListCard 
                       products={msg.data.products} 
                       onAddToCart={(product) => addToCart(product, 1)} 
+                      isRanking={msg.data.isRanking}
+                      isDiscount={msg.data.isDiscount}
+                      title={msg.data.title}
                     />
                   </div>
                 )}

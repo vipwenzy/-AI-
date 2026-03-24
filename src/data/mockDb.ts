@@ -2,6 +2,7 @@ export interface Product {
   id: string;
   name: string;
   price: number;
+  originalPrice?: number;
   unit: string;
   image: string;
   category: string;
@@ -21,7 +22,8 @@ export const MOCK_PRODUCTS: Product[] = [
   {
     id: '2',
     name: '百事可乐 330ml 罐装',
-    price: 44.00,
+    price: 39.90,
+    originalPrice: 44.00,
     unit: '箱 (24)',
     image: 'https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=300&q=80',
     category: '饮料',
@@ -39,7 +41,8 @@ export const MOCK_PRODUCTS: Product[] = [
   {
     id: '4',
     name: '乐事香辣味薯片',
-    price: 65.00,
+    price: 59.00,
+    originalPrice: 65.00,
     unit: '盒 (12)',
     image: 'https://images.unsplash.com/photo-1621447504864-d8686e12698c?w=300&q=80',
     category: '零食',
@@ -48,7 +51,8 @@ export const MOCK_PRODUCTS: Product[] = [
   {
     id: '5',
     name: '农夫山泉矿泉水',
-    price: 28.00,
+    price: 25.00,
+    originalPrice: 28.00,
     unit: '箱 (24)',
     image: 'https://images.unsplash.com/photo-1616118132534-381148898bb4?w=300&q=80',
     category: '饮料',
@@ -57,7 +61,8 @@ export const MOCK_PRODUCTS: Product[] = [
   {
     id: '6',
     name: '奥利奥原味饼干',
-    price: 85.00,
+    price: 75.00,
+    originalPrice: 85.00,
     unit: '箱 (24)',
     image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=300&q=80',
     category: '零食',
