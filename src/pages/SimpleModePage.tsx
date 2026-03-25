@@ -34,7 +34,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [transcript, setTranscript] = useState('');
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [hasMicPermission, setHasMicPermission] = useState(false);
-  const [unselectedIds, setUnselectedIds] = useState<Set<string>>(new Set());
   const [showCheckout, setShowCheckout] = useState(false);
   const [deliveryMethod, setDeliveryMethod] = useState<'express' | 'pickup'>('express');
   const [message, setMessage] = useState('');
@@ -46,29 +45,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [pendingAction, setPendingAction] = useState<{qty: number, isRemove: boolean, isModify: boolean} | null>(null);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const toggleSelection = (productId: string) => {
-    const newSet = new Set(unselectedIds);
-    if (newSet.has(productId)) {
-      newSet.delete(productId);
-    } else {
-      newSet.add(productId);
-    }
-    setUnselectedIds(newSet);
-  };
-
-  const toggleAll = () => {
-    if (unselectedIds.size > 0) {
-      setUnselectedIds(new Set());
-    } else {
-      setUnselectedIds(new Set(cartItems.map(i => i.productId)));
-    }
-  };
-
-  const isAllSelected = cartItems.length > 0 && unselectedIds.size === 0;
-  const selectedCartItems = cartItems.filter(i => !unselectedIds.has(i.productId));
-  const selectedTotalAmount = selectedCartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const selectedTotalQuantity = selectedCartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const sortedCartItems = [...cartItems];
   
@@ -388,11 +364,11 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           <div className="bg-white rounded-xl p-4 shadow-sm space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-800">订单金额</span>
-              <span className="text-[#ff5000] font-medium text-lg">¥{selectedTotalAmount.toFixed(2)}</span>
+              <span className="text-[#ff5000] font-medium text-lg">¥{totalAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-800">合计金额</span>
-              <span className="text-[#ff5000] font-medium text-lg">¥{selectedTotalAmount.toFixed(2)}</span>
+              <span className="text-[#ff5000] font-medium text-lg">¥{totalAmount.toFixed(2)}</span>
             </div>
           </div>
 
@@ -522,17 +498,12 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                   index === cartItems.length - 1 ? "border-0 pb-2" : ""
                 )}
               >
-                {/* Checkbox */}
+                {/* Delete Button */}
                 <button 
-                  onClick={() => toggleSelection(item.productId)}
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center shrink-0 border",
-                    !unselectedIds.has(item.productId) 
-                      ? "bg-[#ff5000] border-[#ff5000] text-white" 
-                      : "border-gray-300 bg-white"
-                  )}
+                  onClick={() => removeFromCart(item.productId)}
+                  className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-500 transition-colors"
                 >
-                  {!unselectedIds.has(item.productId) && <Check size={14} strokeWidth={3} />}
+                  <X size={12} strokeWidth={3} />
                 </button>
 
                 {/* Image */}
@@ -593,38 +564,20 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         {cartItems.length > 0 && (
           <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <button 
-                onClick={toggleAll}
-                className={cn(
-                  "w-5 h-5 rounded-full flex items-center justify-center shrink-0 border",
-                  isAllSelected 
-                    ? "bg-[#ff5000] border-[#ff5000] text-white" 
-                    : "border-gray-300 bg-white"
-                )}
-              >
-                {isAllSelected && <Check size={14} strokeWidth={3} />}
-              </button>
-              <span className="text-sm text-gray-700">已选({selectedCartItems.length})</span>
+              <span className="text-sm text-gray-700 font-medium">共 {cartItems.length} 件商品</span>
             </div>
             
             <div className="flex items-center gap-3">
               <div className="flex flex-col items-end">
                 <div className="text-sm">
-                  总额: <span className="font-bold text-lg text-gray-900">{selectedTotalAmount.toFixed(2)}</span>
-                </div>
-                <div className="text-xs text-gray-400">
-                  总量{selectedTotalQuantity}
+                  总额: <span className="font-bold text-lg text-[#ff5000]">{totalAmount.toFixed(2)}</span>
                 </div>
               </div>
               <button 
                 onClick={() => {
-                  if (selectedCartItems.length === 0) {
-                    alert('请先选择商品');
-                    return;
-                  }
                   setShowCheckout(true);
                 }}
-                className="bg-[#ff5000] text-white px-6 py-2 rounded-full font-medium text-sm hover:bg-[#e64800] active:bg-[#cc4000]"
+                className="bg-[#ff5000] text-white px-8 py-2 rounded-full font-bold text-base hover:bg-[#e64800] active:bg-[#cc4000] shadow-md"
               >
                 下单
               </button>
