@@ -494,14 +494,14 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 className={cn(
-                  "flex items-center gap-3 py-4 border-b border-gray-100",
+                  "flex items-center gap-3 py-4 border-b border-gray-100 relative",
                   index === cartItems.length - 1 ? "border-0 pb-2" : ""
                 )}
               >
                 {/* Delete Button */}
                 <button 
                   onClick={() => removeFromCart(item.productId)}
-                  className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#ff5000] text-white active:scale-90 transition-transform"
+                  className="absolute top-2 right-0 w-5 h-5 rounded-full flex items-center justify-center bg-[#ff5000] text-white active:scale-90 transition-transform z-10 shadow-sm"
                 >
                   <X size={10} strokeWidth={4} />
                 </button>
