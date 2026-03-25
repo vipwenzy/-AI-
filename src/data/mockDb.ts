@@ -1,12 +1,27 @@
+export interface ProductSpec {
+  id: string;
+  name: string;
+  price: number;
+  inventory: number;
+  sku?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
   price: number;
   originalPrice?: number;
   unit: string;
+  units?: string[]; // Multiple units support
+  unitPrices?: Record<string, number>; // Price per unit
   image: string;
   category: string;
   inventory: number;
+  sku?: string;
+  specs?: {
+    title: string;
+    options: ProductSpec[];
+  }[];
 }
 
 export const MOCK_PRODUCTS: Product[] = [
@@ -14,7 +29,9 @@ export const MOCK_PRODUCTS: Product[] = [
     id: '1',
     name: '可口可乐 330ml 罐装',
     price: 45.00,
-    unit: '箱 (24)',
+    unit: '箱',
+    units: ['瓶', '箱'],
+    unitPrices: { '瓶': 2.5, '箱': 45.00 },
     image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300&q=80',
     category: '饮料',
     inventory: 1200
@@ -24,7 +41,9 @@ export const MOCK_PRODUCTS: Product[] = [
     name: '百事可乐 330ml 罐装',
     price: 39.90,
     originalPrice: 44.00,
-    unit: '箱 (24)',
+    unit: '箱',
+    units: ['瓶', '箱'],
+    unitPrices: { '瓶': 2.2, '箱': 39.90 },
     image: 'https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=300&q=80',
     category: '饮料',
     inventory: 850
@@ -33,7 +52,9 @@ export const MOCK_PRODUCTS: Product[] = [
     id: '3',
     name: '乐事原味薯片',
     price: 65.00,
-    unit: '盒 (12)',
+    unit: '盒',
+    units: ['包', '盒'],
+    unitPrices: { '包': 6.0, '盒': 65.00 },
     image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=300&q=80',
     category: '零食',
     inventory: 500
@@ -43,7 +64,9 @@ export const MOCK_PRODUCTS: Product[] = [
     name: '乐事香辣味薯片',
     price: 59.00,
     originalPrice: 65.00,
-    unit: '盒 (12)',
+    unit: '盒',
+    units: ['包', '盒'],
+    unitPrices: { '包': 5.5, '盒': 59.00 },
     image: 'https://images.unsplash.com/photo-1621447504864-d8686e12698c?w=300&q=80',
     category: '零食',
     inventory: 420
@@ -53,7 +76,9 @@ export const MOCK_PRODUCTS: Product[] = [
     name: '农夫山泉矿泉水',
     price: 25.00,
     originalPrice: 28.00,
-    unit: '箱 (24)',
+    unit: '箱',
+    units: ['瓶', '箱'],
+    unitPrices: { '瓶': 1.5, '箱': 25.00 },
     image: 'https://images.unsplash.com/photo-1616118132534-381148898bb4?w=300&q=80',
     category: '饮料',
     inventory: 2000

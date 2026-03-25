@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, MessageSquare } from 'lucide-react';
+import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, MessageSquare, History, Pin } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { MOCK_PRODUCTS, Product } from '../data/mockDb';
 import { cn } from '../lib/utils';
@@ -10,8 +10,9 @@ interface SimpleModePageProps {
 }
 
 const SUGGESTIONS = [
+  "来两箱可乐 (演示模糊匹配)",
+  "可乐2箱，雪碧3箱，乐事5包 (演示复杂场景)",
   "来10箱可口可乐",
-  "来两箱可乐",
   "把农夫山泉改成5箱",
   "去掉百事可乐",
   "奥利奥和雪碧各来5箱"
@@ -26,7 +27,9 @@ export interface ChatMessage {
 }
 
 export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
-  const { items: cartItems, updateQuantity, removeFromCart, addToCart, totalAmount } = useCart();
+  const { items: cartItems, updateQuantity, removeFromCart, addToCart, updateUnit, swapProduct, totalAmount } = useCart();
+  const [swappingItem, setSwappingItem] = useState<any>(null);
+  const [selectedItemForMatches, setSelectedItemForMatches] = useState<any>(null);
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [inputType, setInputType] = useState<'text' | 'voice'>('voice');
@@ -40,7 +43,19 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [sortBy, setSortBy] = useState<'time' | 'price' | 'name'>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [showChatHistory, setShowChatHistory] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showChatPopup, setShowChatPopup] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const autoCloseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto scroll to bottom of chat
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory, isProcessing, isThinking]);
   const [ambiguousMatches, setAmbiguousMatches] = useState<Product[] | null>(null);
   const [pendingAction, setPendingAction] = useState<{qty: number, isRemove: boolean, isModify: boolean} | null>(null);
   const recognitionRef = useRef<any>(null);
@@ -65,34 +80,46 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   }
 
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'zh-CN';
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    
+    if (SpeechRecognition) {
+      try {
+        recognitionRef.current = new (SpeechRecognition as any)();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = 'zh-CN';
 
-      recognitionRef.current.onresult = (event: any) => {
-        let currentTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          currentTranscript += event.results[i][0].transcript;
-        }
-        setTranscript(currentTranscript);
-      };
+        recognitionRef.current.onresult = (event: any) => {
+          let currentTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            currentTranscript += event.results[i][0].transcript;
+          }
+          setTranscript(currentTranscript);
+        };
 
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error', event.error);
-        if (event.error === 'not-allowed') {
-          setSpeechError('请允许使用麦克风以进行语音输入');
-        } else {
-          setSpeechError('语音识别出错，请重试');
-        }
-        setIsRecording(false);
-      };
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('Speech recognition error', event.error);
+          if (event.error === 'not-allowed') {
+            setSpeechError('请允许使用麦克风以进行语音输入');
+          } else {
+            setSpeechError('语音识别出错，请重试');
+          }
+          setIsRecording(false);
+        };
+      } catch (err) {
+        console.error('Failed to initialize speech recognition:', err);
+        setSpeechError('您的浏览器不支持语音识别');
+      }
     } else {
       setSpeechError('您的浏览器不支持语音识别');
     }
   }, []);
+
+  useEffect(() => {
+    if (inputType === 'text' && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [inputType]);
 
   useEffect(() => {
     if (speechError) {
@@ -133,7 +160,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         setHasMicPermission(true);
       } catch (err) {
         console.error('Microphone permission denied', err);
-        setSpeechError('请允许使用麦克风以进行语音输入');
+        setSpeechError('请在浏览器设置中允许使用麦克风，并确保已授予权限');
         setIsRecording(false);
         return;
       }
@@ -146,44 +173,170 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     }
   };
 
+  const finishProcessing = () => {
+    setIsThinking(false);
+    setIsProcessing(false);
+    
+    // Clear any existing timeout
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+    }
+
+    // Auto collapse after a delay if not pinned
+    autoCloseTimeoutRef.current = setTimeout(() => {
+      if (!isPinned) {
+        setShowChatPopup(false);
+      }
+    }, 2000);
+  };
+
   // Simple intent parser
   const processInput = (text: string, isVoice: boolean = false) => {
-    const isRemove = /去掉|不要|删除|取消|减/.test(text);
-    const isModify = /改成|修改为|变成/.test(text);
-    
-    let actions: string[] = [];
-    let ambiguousGroup: Product[] = [];
-    
-    // Extract quantity
-    let qty = 1;
-    const match = text.match(/(\d+)/);
-    if (match && match[1]) qty = parseInt(match[1], 10);
-    else if (text.includes('各来5') || text.includes('各加5')) qty = 5;
-    else if (text.includes('各来10') || text.includes('各加10')) qty = 10;
-    else if (text.includes('两') || text.includes('二')) qty = 2;
+    setIsProcessing(true);
+    setIsThinking(true);
+    setShowChatPopup(true);
 
-    // Check for ambiguous keywords first
-    const ambiguousKeywords = ['可乐', '乐事', '矿泉水', '薯片', '戒指', '莫桑钻', '水'];
-    let foundAmbiguous = false;
-    
-    for (const kw of ambiguousKeywords) {
-      if (text.includes(kw)) {
-        // Check if it contains a more specific name
-        const specificMatch = MOCK_PRODUCTS.find(p => p.name.includes(kw) && text.includes(p.name.split(' ')[0]));
-        if (!specificMatch) {
-          ambiguousGroup = MOCK_PRODUCTS.filter(p => p.name.includes(kw));
-          if (ambiguousGroup.length > 1) {
-            foundAmbiguous = true;
-            break;
+    // Simulate AI processing delay
+    setTimeout(() => {
+      setIsThinking(false);
+      const isComplex = text.includes('，') || text.includes(',') || text.includes(' ');
+      
+      // If it's a complex multi-item input, we handle it differently
+      if (isComplex && (text.includes('箱') || text.includes('包') || text.includes('件'))) {
+        const parts = text.split(/[，, ]+/);
+        let actions: string[] = [];
+        
+        parts.forEach(part => {
+          if (!part.trim()) return;
+          
+          let qty = 1;
+          const qtyMatch = part.match(/(\d+)/);
+          if (qtyMatch) qty = parseInt(qtyMatch[1], 10);
+          
+          // Find matches
+          const cleanPart = part.replace(/\d+|箱|包|件|来|个/g, '').trim();
+          if (!cleanPart) return;
+          
+          const matches = MOCK_PRODUCTS.filter(p => p.name.includes(cleanPart));
+          
+          if (matches.length > 0) {
+            const bestMatch = matches[0];
+            const alternatives = matches.length > 1 ? matches.slice(1) : undefined;
+            
+            addToCart(bestMatch, qty, alternatives);
+            actions.push(`${qty}件${bestMatch.name}${alternatives ? '(含备选)' : ''}`);
+          }
+        });
+        
+        if (actions.length > 0) {
+          const newUserMsg: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: text,
+            type: isVoice ? 'voice' : 'text',
+            timestamp: new Date()
+          };
+
+          const newAiMsg: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'ai',
+            content: `已为您添加：${actions.join('、')}。部分商品有多个匹配项，您可以在购物车中点击“更多选项”进行更换。`,
+            type: 'text',
+            timestamp: new Date()
+          };
+
+          setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+          finishProcessing();
+          return;
+        }
+      }
+
+      const isRemove = /去掉|不要|删除|取消|减/.test(text);
+      const isModify = /改成|修改为|变成/.test(text);
+      
+      let actions: string[] = [];
+      let ambiguousGroup: Product[] = [];
+      
+      // Extract quantity
+      let qty = 1;
+      const match = text.match(/(\d+)/);
+      if (match && match[1]) qty = parseInt(match[1], 10);
+      else if (text.includes('各来5') || text.includes('各加5')) qty = 5;
+      else if (text.includes('各来10') || text.includes('各加10')) qty = 10;
+      else if (text.includes('两') || text.includes('二')) qty = 2;
+
+      // Check for ambiguous keywords first
+      const ambiguousKeywords = ['可乐', '乐事', '矿泉水', '薯片', '戒指', '莫桑钻', '水'];
+      let foundAmbiguous = false;
+      
+      for (const kw of ambiguousKeywords) {
+        if (text.includes(kw)) {
+          // Check if it contains a more specific name
+          const specificMatch = MOCK_PRODUCTS.find(p => p.name.includes(kw) && text.includes(p.name.split(' ')[0]));
+          if (!specificMatch) {
+            ambiguousGroup = MOCK_PRODUCTS.filter(p => p.name.includes(kw));
+            if (ambiguousGroup.length > 1) {
+              foundAmbiguous = true;
+              break;
+            }
           }
         }
       }
-    }
 
-    if (foundAmbiguous) {
-      setAmbiguousMatches(ambiguousGroup);
-      setPendingAction({ qty, isRemove, isModify });
-      
+      if (foundAmbiguous) {
+        setAmbiguousMatches(ambiguousGroup);
+        setPendingAction({ qty, isRemove, isModify });
+        
+        const newUserMsg: ChatMessage = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: text,
+          type: isVoice ? 'voice' : 'text',
+          timestamp: new Date()
+        };
+
+        const newAiMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'ai',
+          content: `找到多个包含该名称的商品，请选择您需要哪一个？`,
+          type: 'text',
+          timestamp: new Date()
+        };
+
+        setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+        finishProcessing();
+        return;
+      }
+
+      // Normal processing
+      MOCK_PRODUCTS.forEach(product => {
+        // Very basic keyword matching
+        const keyword = product.name.replace(/ /g, '').slice(0, 4); // basic matching
+        const shortName = product.name.split(' ')[0];
+        if (text.includes(keyword) || text.includes(shortName)) {
+          if (isRemove) {
+            removeFromCart(product.id);
+            actions.push(`已为您移除 ${product.name}`);
+          } else {
+            if (isModify) {
+              const item = cartItems.find(i => i.productId === product.id);
+              if (item) {
+                updateQuantity(product.id, qty - item.quantity);
+                actions.push(`已将 ${product.name} 数量修改为 ${qty}`);
+              } else {
+                addToCart(product, qty);
+                actions.push(`已为您添加 ${qty}件 ${product.name}`);
+              }
+            } else {
+              addToCart(product, qty);
+              actions.push(`已为您添加 ${qty}件 ${product.name}`);
+            }
+          }
+        }
+      });
+
+      let aiResponse = actions.length > 0 ? actions.join('，') + '。' : '抱歉，我没有听清您需要的商品，请再说一遍。';
+
       const newUserMsg: ChatMessage = {
         id: Date.now().toString(),
         role: 'user',
@@ -195,61 +348,14 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       const newAiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'ai',
-        content: `找到多个包含该名称的商品，请选择您需要哪一个？`,
+        content: aiResponse,
         type: 'text',
         timestamp: new Date()
       };
 
       setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
-      return;
-    }
-
-    // Normal processing
-    MOCK_PRODUCTS.forEach(product => {
-      // Very basic keyword matching
-      const keyword = product.name.replace(/ /g, '').slice(0, 4); // basic matching
-      const shortName = product.name.split(' ')[0];
-      if (text.includes(keyword) || text.includes(shortName)) {
-        if (isRemove) {
-          removeFromCart(product.id);
-          actions.push(`已为您移除 ${product.name}`);
-        } else {
-          if (isModify) {
-            const item = cartItems.find(i => i.productId === product.id);
-            if (item) {
-              updateQuantity(product.id, qty - item.quantity);
-              actions.push(`已将 ${product.name} 数量修改为 ${qty}`);
-            } else {
-              addToCart(product, qty);
-              actions.push(`已为您添加 ${qty}件 ${product.name}`);
-            }
-          } else {
-            addToCart(product, qty);
-            actions.push(`已为您添加 ${qty}件 ${product.name}`);
-          }
-        }
-      }
-    });
-
-    let aiResponse = actions.length > 0 ? actions.join('，') + '。' : '抱歉，我没有听清您需要的商品，请再说一遍。';
-
-    const newUserMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: text,
-      type: isVoice ? 'voice' : 'text',
-      timestamp: new Date()
-    };
-
-    const newAiMsg: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'ai',
-      content: aiResponse,
-      type: 'text',
-      timestamp: new Date()
-    };
-
-    setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+      finishProcessing();
+    }, 1000);
   };
 
   const handleAmbiguousSelection = (product: Product) => {
@@ -304,8 +410,9 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
-    processInput(suggestion);
+    const cleanSuggestion = suggestion.split(' (')[0];
+    setInputValue(cleanSuggestion);
+    processInput(cleanSuggestion);
     setInputValue('');
     setShowSuggestions(false);
   };
@@ -498,54 +605,99 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                   index === cartItems.length - 1 ? "border-0 pb-2" : ""
                 )}
               >
-                {/* Delete Button */}
+                {/* Delete Button - Subtle white circle with cross */}
                 <button 
                   onClick={() => removeFromCart(item.productId)}
-                  className="absolute top-2 right-0 w-5 h-5 rounded-full flex items-center justify-center bg-[#ff5000] text-white active:scale-90 transition-transform z-10 shadow-sm"
+                  className="absolute top-2 right-0 w-6 h-6 bg-white border border-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 shadow-sm z-10 transition-all active:scale-90"
+                  title="删除商品"
                 >
-                  <X size={10} strokeWidth={4} />
+                  <X size={14} />
                 </button>
 
-                {/* Image */}
-                <img src={item.product.image} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100 shrink-0" />
+                {/* Image & More Matches */}
+                <div className="flex flex-col items-center gap-2 shrink-0">
+                  <img src={item.product.image} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" />
+                  {item.alternatives && item.alternatives.length > 0 && (
+                    <button 
+                      onClick={() => setSelectedItemForMatches(item)}
+                      className="text-[10px] text-blue-600 font-medium flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded-full border border-blue-100 whitespace-nowrap"
+                    >
+                      更多匹配({item.alternatives.length})
+                      <ChevronRight size={8} />
+                    </button>
+                  )}
+                </div>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0 flex flex-col justify-between h-20">
                   <div>
                     <h3 className="font-medium text-gray-900 text-sm leading-tight line-clamp-2">
-                      <span className="bg-blue-400 text-white text-[10px] px-1 rounded mr-1 align-middle">新</span>
                       <span className="align-middle">{item.product.name}</span>
                     </h3>
-                    <div className="text-xs text-gray-400 mt-1 truncate">
-                      {item.product.sku || '默认规格'} | 库存{Math.floor(Math.random() * 100) + 20}个
+                    
+                    {/* Units Selection on Card */}
+                    {item.product.units && (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex gap-2">
+                          {item.product.units.map(u => (
+                            <button 
+                              key={u}
+                              onClick={() => updateUnit(item.productId, u)}
+                              className={cn(
+                                "px-2 py-0.5 rounded text-[10px] border transition-all",
+                                item.product.unit === u 
+                                  ? "bg-[#ff5000] border-[#ff5000] text-white shadow-sm font-bold" 
+                                  : "bg-white border-gray-200 text-gray-500"
+                              )}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="text-[#ff5000] font-bold text-base">
+                        ¥{item.product.price}<span className="text-[10px] font-normal text-gray-400 ml-0.5">/{item.product.unit}</span>
+                      </div>
+                      
+                      <button 
+                        onClick={() => setSwappingItem(item)}
+                        className="text-[10px] text-[#ff5000] border border-[#ff5000] px-2 py-0.5 rounded flex items-center gap-0.5 bg-orange-50/50 relative"
+                      >
+                        <span>选规格</span>
+                        {/* Multiple matches badge */}
+                        {(item.alternatives?.length || 0) > 0 && (
+                          <div className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white">
+                            {item.alternatives?.length}
+                          </div>
+                        )}
+                      </button>
                     </div>
                   </div>
-                  
-                  <div className="flex justify-between items-end">
-                    <div className="text-[#ff5000] font-bold text-base">
-                      ¥{item.product.price}<span className="text-xs font-normal text-gray-500">/个</span>
-                    </div>
-                    
-                    {/* Quantity Control */}
-                    <div className="flex items-center border border-gray-200 rounded overflow-hidden">
-                      <button 
-                        onClick={() => updateQuantity(item.productId, -1)}
-                        className="w-7 h-6 flex items-center justify-center bg-gray-50 text-gray-600 hover:bg-gray-100 active:bg-gray-200"
-                      >
-                        <Minus size={12} />
-                      </button>
-                      <span className="w-8 text-center text-xs font-medium border-x border-gray-200 bg-white leading-6">
-                        {item.quantity}
-                      </span>
-                      <button 
-                        onClick={() => updateQuantity(item.productId, 1)}
-                        className="w-7 h-6 flex items-center justify-center bg-[#ff5000] text-white hover:bg-[#e64800] active:bg-[#cc4000]"
-                      >
-                        <Plus size={12} />
-                      </button>
-                    </div>
+                
+                <div className="flex justify-end items-end mt-2">
+                  {/* Quantity Control */}
+                  <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden h-7">
+                    <button 
+                      onClick={() => updateQuantity(item.productId, -1)}
+                      className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 active:bg-gray-300 transition-colors"
+                    >
+                      <Minus size={12} />
+                    </button>
+                    <span className="w-8 text-center text-xs font-bold text-gray-800">
+                      {item.quantity}
+                    </span>
+                    <button 
+                      onClick={() => updateQuantity(item.productId, 1)}
+                      className="w-8 h-full flex items-center justify-center bg-gray-300/50 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
+                    >
+                      <Plus size={12} />
+                    </button>
                   </div>
                 </div>
+              </div>
               </motion.div>
             ))}
             <div className="text-center text-xs text-gray-400 mt-4 mb-2 flex items-center justify-center gap-2">
@@ -587,6 +739,114 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
         {/* Input Field Area */}
         <div className="px-4 py-3 bg-white relative">
+          {/* AI对话 Popup (Conversation History & Processing) - Docked version */}
+          <AnimatePresence>
+            {showChatPopup && (
+              <>
+                {/* Click-outside-to-close backdrop */}
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowChatPopup(false)}
+                  className="fixed inset-0 z-20"
+                />
+                
+                <motion.div 
+                  initial={{ opacity: 0, height: 0, y: 10 }}
+                  animate={{ opacity: 1, height: 'auto', y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: 10 }}
+                  className="absolute bottom-full left-0 right-0 bg-white rounded-t-2xl shadow-[0_-15px_40px_rgba(0,0,0,0.12)] border-t border-blue-50 overflow-hidden z-30 flex flex-col"
+                >
+                  {/* Header */}
+                  <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-white">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <span className="text-sm font-bold text-gray-800">AI 对话</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setChatHistory([])}
+                      className="text-[10px] text-blue-600 font-medium px-2 py-1 rounded-full bg-blue-50 hover:bg-blue-100 transition-colors"
+                    >
+                      新建对话
+                    </button>
+                    <button 
+                      onClick={() => setIsPinned(!isPinned)}
+                      className={cn(
+                        "p-1.5 rounded-full transition-colors",
+                        isPinned ? "bg-blue-100 text-blue-600" : "text-gray-400 hover:bg-gray-100"
+                      )}
+                      title={isPinned ? "取消置顶" : "置顶对话"}
+                    >
+                      <Pin size={14} className={cn(isPinned && "fill-current")} />
+                    </button>
+                    <button 
+                      onClick={() => setShowChatPopup(false)}
+                      className="p-1.5 rounded-full text-gray-400 hover:bg-gray-100 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-3 space-y-4 bg-gray-50/30 max-h-[50vh]">
+                  {chatHistory.length === 0 && !isThinking && (
+                    <div className="text-center py-8 text-gray-400 text-xs italic">
+                      暂无对话记录，试着对我说点什么吧
+                    </div>
+                  )}
+                  {chatHistory.map((msg, idx) => (
+                    <div key={msg.id} className={cn(
+                      "flex flex-col",
+                      msg.role === 'user' ? "items-end" : "items-start"
+                    )}>
+                      <div className={cn(
+                        "px-3 py-2 rounded-2xl text-sm max-w-[85%] shadow-sm",
+                        msg.role === 'user' 
+                          ? "bg-blue-500 text-white rounded-tr-none" 
+                          : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
+                      )}>
+                        {msg.content}
+                      </div>
+                      <div className="text-[10px] text-gray-400 mt-1 px-1">
+                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isThinking && (
+                    <div className="flex flex-col items-start">
+                      <div className="bg-white text-gray-800 px-3 py-2 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <motion.div 
+                            animate={{ y: [0, -4, 0] }}
+                            transition={{ repeat: Infinity, duration: 0.6, delay: 0 }}
+                            className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
+                          />
+                          <motion.div 
+                            animate={{ y: [0, -4, 0] }}
+                            transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
+                            className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
+                          />
+                          <motion.div 
+                            animate={{ y: [0, -4, 0] }}
+                            transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
+                            className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500 font-medium">AI 正在思考中...</span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
           {/* Suggestions Popup */}
           <AnimatePresence>
             {showSuggestions && (
@@ -621,18 +881,69 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
           {/* Input Field */}
           <div className="flex items-center gap-2">
+            {/* Toggle Input Mode */}
+            <button 
+              onClick={() => setInputType(inputType === 'voice' ? 'text' : 'voice')}
+              className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors shrink-0"
+            >
+              {inputType === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
+            </button>
+
             <div className="flex-1 relative">
-              <button
-                onClick={toggleRecording}
-                onContextMenu={(e) => e.preventDefault()}
-                className={cn(
-                  "w-full h-10 rounded-full font-bold text-sm transition-all select-none",
-                  isRecording ? "bg-gray-300 text-gray-800 shadow-inner" : "bg-gray-100 text-gray-800"
-                )}
-              >
-                {isRecording ? "点击 结束" : "点击 说话"}
-              </button>
+              {inputType === 'voice' ? (
+                <button
+                  onClick={toggleRecording}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={cn(
+                    "w-full h-10 rounded-full font-bold text-sm transition-all select-none",
+                    isRecording ? "bg-gray-300 text-gray-800 shadow-inner" : "bg-gray-100 text-gray-800"
+                  )}
+                >
+                  {isRecording ? "点击 结束" : "点击 说话"}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    placeholder="输入商品名称或数量..."
+                    className="flex-1 h-10 bg-gray-100 rounded-full px-4 text-sm outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                  />
+                  {inputValue.trim() && (
+                    <button
+                      onClick={handleSend}
+                      className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 active:scale-95 transition-all shrink-0"
+                    >
+                      <Send size={18} />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
+
+            {/* AI对话 Button */}
+            <button 
+              onClick={() => setShowChatPopup(!showChatPopup)}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 relative",
+                showChatPopup ? "bg-blue-500 text-white shadow-lg scale-110" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              )}
+            >
+              <motion.div
+                animate={showChatPopup ? { rotate: [0, -10, 10, 0] } : {}}
+                transition={{ duration: 0.5 }}
+              >
+                <MessageSquare size={20} />
+              </motion.div>
+              {chatHistory.length > 0 && !showChatPopup && (
+                <div className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full border border-white"></div>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -777,87 +1088,176 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         )}
       </AnimatePresence>
 
-      {/* Chat History Drawer */}
+        {/* Matches Selection Modal */}
       <AnimatePresence>
-        {showChatHistory && (
+        {selectedItemForMatches && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowChatHistory(false)}
-              className="absolute inset-0 bg-black/40 z-40"
+              onClick={() => setSelectedItemForMatches(null)}
+              className="absolute inset-0 bg-black/40 z-[130] backdrop-blur-sm"
             />
             <motion.div
-              initial={{ y: '100%' }}
+              initial={{ y: "100%" }}
               animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute bottom-0 left-0 right-0 h-[70%] bg-gray-50 rounded-t-3xl z-50 flex flex-col shadow-2xl"
+              exit={{ y: "100%" }}
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[140] p-5 pb-8 shadow-2xl flex flex-col max-h-[70vh]"
             >
-              <div className="flex items-center justify-between p-4 bg-white rounded-t-3xl border-b border-gray-100 shrink-0">
-                <h3 className="font-bold text-gray-800 text-lg">聊天历史</h3>
-                <button 
-                  onClick={() => setShowChatHistory(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200"
-                >
-                  <X size={18} />
-                </button>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-lg text-gray-900">选择匹配商品</h3>
+                <button onClick={() => setSelectedItemForMatches(null)} className="text-gray-400"><X size={24} /></button>
               </div>
               
-              <div 
-                className="flex-1 overflow-y-auto p-4 space-y-4"
-                ref={(el) => {
-                  if (el) {
-                    el.scrollTop = el.scrollHeight;
-                  }
-                }}
-              >
-                {chatHistory.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                    <MessageSquare size={48} className="mb-4 opacity-20" />
-                    <p>暂无聊天记录</p>
-                  </div>
-                ) : (
-                  chatHistory.map((msg) => (
-                    <div 
-                      key={msg.id} 
-                      className={cn(
-                        "flex w-full",
-                        msg.role === 'user' ? "justify-end" : "justify-start"
-                      )}
+              <div className="flex-1 overflow-y-auto space-y-4">
+                <div className="p-3 bg-orange-50 rounded-xl border border-orange-100 mb-4">
+                  <div className="text-xs text-orange-600 mb-1 font-medium">当前商品:</div>
+                  <div className="font-bold text-gray-900">{selectedItemForMatches.product.name}</div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="text-sm font-medium text-gray-400">为您找到以下匹配商品:</div>
+                  {selectedItemForMatches.alternatives?.map(alt => (
+                    <button 
+                      key={alt.id}
+                      onClick={() => {
+                        swapProduct(selectedItemForMatches.productId, alt);
+                        setSelectedItemForMatches(null);
+                      }}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#ff5000] hover:bg-orange-50/30 transition-all text-left"
                     >
-                      <div 
-                        className={cn(
-                          "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
-                          msg.role === 'user' 
-                            ? "bg-blue-500 text-white rounded-tr-sm" 
-                            : "bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm"
-                        )}
-                      >
-                        {msg.role === 'user' && msg.type === 'voice' && (
-                          <div className="flex items-center gap-1 mb-1 opacity-80 text-xs">
-                            <Mic size={12} /> 语音输入
-                          </div>
-                        )}
-                        <p className="leading-relaxed">{msg.content}</p>
-                        <div 
-                          className={cn(
-                            "text-[10px] mt-1 text-right",
-                            msg.role === 'user' ? "text-blue-100" : "text-gray-400"
-                          )}
-                        >
-                          {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
+                      <img src={alt.image} className="w-12 h-12 rounded-lg object-cover bg-gray-50" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 text-sm truncate">{alt.name}</div>
+                        <div className="text-[#ff5000] font-bold text-sm mt-0.5">¥{alt.price}</div>
                       </div>
-                    </div>
-                  ))
-                )}
+                      <div className="text-[10px] text-[#ff5000] border border-[#ff5000] px-2 py-1 rounded-full">选择</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
+
+      {/* Product Swap Modal */}
+        <AnimatePresence>
+          {swappingItem && (
+            <>
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setSwappingItem(null)}
+                className="absolute inset-0 bg-black/40 z-[60] backdrop-blur-sm"
+              />
+              <motion.div 
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[61] p-5 pb-6 shadow-2xl max-h-[90vh] flex flex-col"
+              >
+                <div className="flex justify-between items-start mb-6 shrink-0">
+                  <div className="flex gap-4">
+                    <div className="w-20 h-20 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
+                      <img src={swappingItem.product.image} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <h3 className="font-bold text-lg text-gray-900 mb-1">{swappingItem.product.name}</h3>
+                      <div className="text-xs text-gray-400 mb-2">{swappingItem.product.sku || '10001 | 1件x24盒'}</div>
+                      <div className="text-[#ff5000] font-bold text-xl">
+                        ¥{swappingItem.product.price}<span className="text-xs font-normal text-gray-500 ml-1">/{swappingItem.product.unit}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSwappingItem(null)}
+                    className="p-1 text-gray-300 hover:text-gray-500"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto py-2 space-y-8">
+                  {/* Unit Selection */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-400 mb-4">单位</h4>
+                    <div className="flex flex-wrap gap-3">
+                      {(swappingItem.product.units || ['瓶', '箱']).map((u: string) => (
+                        <button 
+                          key={u}
+                          onClick={() => updateUnit(swappingItem.productId, u)}
+                          className={cn(
+                            "px-6 py-2 rounded-lg text-sm font-medium transition-all border",
+                            swappingItem.product.unit === u
+                              ? "border-[#ff5000] text-[#ff5000] bg-white shadow-sm ring-1 ring-[#ff5000]"
+                              : "border-gray-100 bg-gray-50 text-gray-600"
+                          )}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Variant Selection with Quantity */}
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">默认规格</div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden h-8">
+                          <button 
+                            onClick={() => updateQuantity(swappingItem.productId, -1)}
+                            className="w-9 h-full flex items-center justify-center text-gray-400 hover:bg-gray-200"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span className="w-10 text-center text-sm font-bold text-gray-800">{swappingItem.quantity}</span>
+                          <button 
+                            onClick={() => updateQuantity(swappingItem.productId, 1)}
+                            className="w-9 h-full flex items-center justify-center bg-[#ff5000] text-white"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                        <div className="text-[10px] text-gray-400">库存: {swappingItem.product.inventory}{swappingItem.product.unit}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 shrink-0">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="text-sm">总数<span className="font-bold ml-1 text-base">{swappingItem.quantity}</span></div>
+                    <div className="text-sm">总金额<span className="font-bold ml-1 text-base text-[#ff5000]">¥{(swappingItem.product.price * swappingItem.quantity).toFixed(2)}</span></div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => {
+                        removeFromCart(swappingItem.productId);
+                        setSwappingItem(null);
+                      }}
+                      className="flex-1 h-12 border border-gray-200 text-gray-600 rounded-xl font-medium text-base active:bg-gray-50 transition-colors"
+                    >
+                      移出购物车
+                    </button>
+                    <button 
+                      onClick={() => setSwappingItem(null)}
+                      className="flex-[1.5] h-12 bg-[#ff5000] text-white rounded-xl font-bold text-base shadow-lg shadow-orange-100 active:scale-[0.98] transition-transform"
+                    >
+                      确认
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
     </div>
   );
 }

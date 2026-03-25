@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, Sparkles, ChevronDown, X, Info, Check, Search, ChevronUp } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, Sparkles, ChevronDown, X, Info, Check, Search, ChevronUp, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CartPage({ onClose }: { onClose?: () => void }) {
-  const { items: cartItems, addToCart, removeFromCart, updateQuantity, clearCart, totalAmount, totalItems } = useCart();
-  const [selectedProductForSpec, setSelectedProductForSpec] = useState<any>(null);
+  const { items: cartItems, addToCart, removeFromCart, updateQuantity, updateUnit, swapProduct, clearCart, totalAmount, totalItems } = useCart();
+  const [selectedItemForSpec, setSelectedItemForSpec] = useState<any>(null);
+  const [selectedItemForMatches, setSelectedItemForMatches] = useState<any>(null);
   const [unselectedIds, setUnselectedIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'time' | 'price' | 'name'>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -82,9 +83,11 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
               </button>
               <button 
                 onClick={clearCart}
-                className="text-sm text-blue-600"
+                className="text-sm text-gray-500 hover:text-red-500 flex items-center gap-1"
+                title="清空购物车"
               >
-                清空
+                <Trash2 size={16} />
+                <span>清空</span>
               </button>
             </div>
           </div>
@@ -144,10 +147,19 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={cn(
-                    "flex items-center gap-3 py-4 border-b border-gray-100",
+                    "flex items-center gap-3 py-4 border-b border-gray-100 relative",
                     index === cartItems.length - 1 ? "border-0 pb-2" : ""
                   )}
                 >
+                  {/* Delete Button - Subtle white circle with cross */}
+                  <button 
+                    onClick={() => removeFromCart(item.productId)}
+                    className="absolute top-2 right-0 w-6 h-6 bg-white border border-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 shadow-sm z-10 transition-all active:scale-90"
+                    title="删除商品"
+                  >
+                    <X size={14} />
+                  </button>
+
                   {/* Checkbox */}
                   <button 
                     onClick={() => toggleSelection(item.productId)}
@@ -161,40 +173,81 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
                     {!unselectedIds.has(item.productId) && <Check size={14} strokeWidth={3} />}
                   </button>
 
-                  {/* Image */}
-                  <img src={item.product.image} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100 shrink-0" />
+                  {/* Image & More Matches */}
+                  <div className="flex flex-col items-center gap-2 shrink-0">
+                    <img src={item.product.image} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" />
+                    {item.alternatives && item.alternatives.length > 0 && (
+                      <button 
+                        onClick={() => setSelectedItemForMatches(item)}
+                        className="text-[10px] text-blue-600 font-medium flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded-full border border-blue-100 whitespace-nowrap"
+                      >
+                        更多匹配({item.alternatives.length})
+                        <ChevronRight size={8} />
+                      </button>
+                    )}
+                  </div>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0 flex flex-col justify-between h-20">
-                    <div>
-                      <h3 className="font-medium text-gray-900 text-sm leading-tight line-clamp-2">
-                        <span className="bg-blue-400 text-white text-[10px] px-1 rounded mr-1 align-middle">新</span>
-                        <span className="align-middle">{item.product.name}</span>
-                      </h3>
-                      <div className="text-xs text-gray-400 mt-1 truncate">
-                        {item.product.sku || '默认规格'} | 库存{Math.floor(Math.random() * 100) + 20}个
+                      <div>
+                        <h3 className="font-medium text-gray-900 text-sm leading-tight line-clamp-2">
+                          <span className="align-middle">{item.product.name}</span>
+                        </h3>
+                        
+                        {/* Units Selection on Card */}
+                        {item.product.units && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <div className="flex gap-2">
+                              {item.product.units.map(u => (
+                                <button 
+                                  key={u}
+                                  onClick={() => updateUnit(item.productId, u)}
+                                  className={cn(
+                                    "px-2 py-0.5 rounded text-[10px] border transition-all",
+                                    item.product.unit === u 
+                                      ? "bg-[#ff5000] border-[#ff5000] text-white shadow-sm font-bold" 
+                                      : "bg-white border-gray-200 text-gray-500"
+                                  )}
+                                >
+                                  {u}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between mt-1">
+                          <div className="text-[#ff5000] font-bold text-base">
+                            ¥{item.product.price}<span className="text-[10px] font-normal text-gray-400 ml-0.5">/{item.product.unit}</span>
+                          </div>
+                          
+                          <button 
+                            onClick={() => setSelectedItemForSpec(item)}
+                            className="text-[10px] text-[#ff5000] border border-[#ff5000] px-2 py-0.5 rounded flex items-center gap-0.5 bg-orange-50/50 relative"
+                          >
+                            <span>选规格</span>
+                            <div className="absolute -top-1.5 -right-1.5 bg-[#ff5000] text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white">
+                              {item.quantity}
+                            </div>
+                          </button>
+                        </div>
                       </div>
-                    </div>
                     
-                    <div className="flex justify-between items-end">
-                      <div className="text-[#ff5000] font-bold text-base">
-                        ¥{item.product.price}<span className="text-xs font-normal text-gray-500">/个</span>
-                      </div>
-                      
+                    <div className="flex justify-end items-end mt-2">
                       {/* Quantity Control */}
-                      <div className="flex items-center border border-gray-200 rounded overflow-hidden">
+                      <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden h-7">
                         <button 
                           onClick={() => updateQuantity(item.productId, -1)}
-                          className="w-7 h-6 flex items-center justify-center bg-gray-50 text-gray-600 hover:bg-gray-100 active:bg-gray-200"
+                          className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 active:bg-gray-300 transition-colors"
                         >
                           <Minus size={12} />
                         </button>
-                        <span className="w-8 text-center text-xs font-medium border-x border-gray-200 bg-white leading-6">
+                        <span className="w-8 text-center text-xs font-bold text-gray-800">
                           {item.quantity}
                         </span>
                         <button 
                           onClick={() => addToCart(item.product)}
-                          className="w-7 h-6 flex items-center justify-center bg-[#ff5000] text-white hover:bg-[#e64800] active:bg-[#cc4000]"
+                          className="w-8 h-full flex items-center justify-center bg-gray-300/50 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
                         >
                           <Plus size={12} />
                         </button>
@@ -249,15 +302,69 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
         </>
       )}
 
-      {/* Multi-Spec Modal */}
+      {/* Matches Selection Modal */}
       <AnimatePresence>
-        {selectedProductForSpec && (
+        {selectedItemForMatches && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedProductForSpec(null)}
+              onClick={() => setSelectedItemForMatches(null)}
+              className="absolute inset-0 bg-black/40 z-[130] backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[140] p-5 pb-8 shadow-2xl flex flex-col max-h-[70vh]"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-lg text-gray-900">选择匹配商品</h3>
+                <button onClick={() => setSelectedItemForMatches(null)} className="text-gray-400"><X size={24} /></button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto space-y-4">
+                <div className="p-3 bg-orange-50 rounded-xl border border-orange-100 mb-4">
+                  <div className="text-xs text-orange-600 mb-1 font-medium">当前商品:</div>
+                  <div className="font-bold text-gray-900">{selectedItemForMatches.product.name}</div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="text-sm font-medium text-gray-400">为您找到以下匹配商品:</div>
+                  {selectedItemForMatches.alternatives?.map(alt => (
+                    <button 
+                      key={alt.id}
+                      onClick={() => {
+                        swapProduct(selectedItemForMatches.productId, alt);
+                        setSelectedItemForMatches(null);
+                      }}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#ff5000] hover:bg-orange-50/30 transition-all text-left"
+                    >
+                      <img src={alt.image} className="w-12 h-12 rounded-lg object-cover bg-gray-50" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 text-sm truncate">{alt.name}</div>
+                        <div className="text-[#ff5000] font-bold text-sm mt-0.5">¥{alt.price}</div>
+                      </div>
+                      <div className="text-[10px] text-[#ff5000] border border-[#ff5000] px-2 py-1 rounded-full">选择</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Multi-Spec Modal */}
+      <AnimatePresence>
+        {selectedItemForSpec && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedItemForSpec(null)}
               className="absolute inset-0 bg-black/40 z-[110] backdrop-blur-sm"
             />
             <motion.div
@@ -265,53 +372,118 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[120] p-5 pb-8 shadow-2xl"
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[120] p-5 pb-6 shadow-2xl max-h-[90vh] flex flex-col"
             >
-              <div className="flex justify-between items-start mb-4">
+              <div className="flex justify-between items-start mb-6 shrink-0">
                 <div className="flex gap-4">
-                  <div className="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
-                    <img src={selectedProductForSpec.image} className="w-full h-full object-cover mix-blend-multiply" />
+                  <div className="w-20 h-20 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
+                    <img src={selectedItemForSpec.product.image} className="w-full h-full object-cover" />
                   </div>
-                  <div>
-                    <div className="text-blue-600 font-bold font-mono text-xl mb-1">
-                      <span className="text-sm mr-0.5">¥</span>{selectedProductForSpec.price}
+                  <div className="flex flex-col justify-center">
+                    <h3 className="font-bold text-lg text-gray-900 mb-1">{selectedItemForSpec.product.name}</h3>
+                    <div className="text-xs text-gray-400 mb-2">{selectedItemForSpec.product.sku || '10001 | 1件x24盒'}</div>
+                    <div className="text-[#ff5000] font-bold text-xl">
+                      ¥{selectedItemForSpec.product.price}<span className="text-xs font-normal text-gray-500 ml-1">/{selectedItemForSpec.product.unit}</span>
                     </div>
-                    <div className="text-sm text-gray-500 mb-1">库存: 充足</div>
-                    <div className="text-sm text-gray-900">已选: 默认规格</div>
                   </div>
                 </div>
                 <button 
-                  onClick={() => setSelectedProductForSpec(null)}
-                  className="p-2 bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full"
+                  onClick={() => setSelectedItemForSpec(null)}
+                  className="p-1 text-gray-300 hover:text-gray-500"
                 >
-                  <X size={20} />
+                  <X size={24} />
                 </button>
               </div>
 
-              <div className="space-y-4 mb-8">
+              <div className="flex-1 overflow-y-auto py-2 space-y-8">
+                {/* Unit Selection */}
                 <div>
-                  <h4 className="font-medium text-sm text-gray-900 mb-2">口味/规格</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <button className="px-4 py-1.5 rounded-lg border-2 border-blue-600 bg-blue-50 text-blue-600 text-sm font-medium">默认规格</button>
-                    <button className="px-4 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 text-sm hover:bg-gray-50">其他口味</button>
-                    <button className="px-4 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 text-sm hover:bg-gray-50">大包装</button>
+                  <h4 className="text-sm font-medium text-gray-400 mb-4">单位</h4>
+                  <div className="flex flex-wrap gap-3">
+                    {(selectedItemForSpec.product.units || ['瓶', '箱']).map((u: string) => (
+                      <button 
+                        key={u}
+                        onClick={() => updateUnit(selectedItemForSpec.productId, u)}
+                        className={cn(
+                          "px-6 py-2 rounded-lg text-sm font-medium transition-all border",
+                          selectedItemForSpec.product.unit === u
+                            ? "border-[#ff5000] text-[#ff5000] bg-white shadow-sm ring-1 ring-[#ff5000]"
+                            : "border-gray-100 bg-gray-50 text-gray-600"
+                        )}
+                      >
+                        {u}
+                      </button>
+                    ))}
                   </div>
                 </div>
+
+                {/* Spec Selection */}
                 <div>
-                  <h4 className="font-medium text-sm text-gray-900 mb-2">包装方式</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <button className="px-4 py-1.5 rounded-lg border-2 border-blue-600 bg-blue-50 text-blue-600 text-sm font-medium">整箱装</button>
-                    <button className="px-4 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 text-sm hover:bg-gray-50">散装</button>
+                  <h4 className="text-sm font-medium text-gray-400 mb-4">国潮西施</h4>
+                  <div className="flex flex-wrap gap-3">
+                    <button className="px-4 py-2 rounded-lg border border-[#ff5000] text-[#ff5000] bg-white text-sm font-medium relative">
+                      D-12薄荷米棕色
+                      <div className="absolute -top-2 -right-2 bg-[#ff5000] text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">2</div>
+                    </button>
+                    <button className="px-4 py-2 rounded-lg border border-gray-100 bg-gray-50 text-gray-600 text-sm">D-00淡化提浅膏</button>
+                  </div>
+                </div>
+
+                {/* Variant Selection with Quantity */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">8寸</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden h-8">
+                        <button className="w-9 h-full flex items-center justify-center text-gray-400"><Minus size={14} /></button>
+                        <span className="w-10 text-center text-sm font-bold text-gray-800">1</span>
+                        <button className="w-9 h-full flex items-center justify-center bg-[#ff5000] text-white"><Plus size={14} /></button>
+                      </div>
+                      <div className="text-[10px] text-gray-400">库存: 0{selectedItemForSpec.product.unit}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">6寸</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden h-8">
+                        <button className="w-9 h-full flex items-center justify-center text-gray-400"><Minus size={14} /></button>
+                        <span className="w-10 text-center text-sm font-bold text-gray-800">1</span>
+                        <button className="w-9 h-full flex items-center justify-center bg-[#ff5000] text-white"><Plus size={14} /></button>
+                      </div>
+                      <div className="text-[10px] text-gray-400">库存: 0{selectedItemForSpec.product.unit}</div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <button 
-                onClick={() => setSelectedProductForSpec(null)}
-                className="w-full h-12 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-transform"
-              >
-                确定
-              </button>
+              <div className="pt-6 shrink-0">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="text-sm">总数<span className="font-bold ml-1 text-base">2</span></div>
+                  <div className="text-sm">总金额<span className="font-bold ml-1 text-base text-[#ff5000]">¥9.6</span></div>
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => {
+                      removeFromCart(selectedItemForSpec.productId);
+                      setSelectedItemForSpec(null);
+                    }}
+                    className="flex-1 h-12 border border-gray-200 text-gray-600 rounded-xl font-medium text-base active:bg-gray-50 transition-colors"
+                  >
+                    移出购物车
+                  </button>
+                  <button 
+                    onClick={() => setSelectedItemForSpec(null)}
+                    className="flex-[1.5] h-12 bg-[#ff5000] text-white rounded-xl font-bold text-base shadow-lg shadow-orange-100 active:scale-[0.98] transition-transform"
+                  >
+                    确认
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </>
         )}
