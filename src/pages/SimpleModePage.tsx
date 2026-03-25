@@ -501,9 +501,9 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 {/* Delete Button */}
                 <button 
                   onClick={() => removeFromCart(item.productId)}
-                  className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-500 transition-colors"
+                  className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#ff5000] text-white active:scale-90 transition-transform"
                 >
-                  <X size={12} strokeWidth={3} />
+                  <X size={10} strokeWidth={4} />
                 </button>
 
                 {/* Image */}
