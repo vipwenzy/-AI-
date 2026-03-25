@@ -507,21 +507,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             </div>
             <h3 className="text-xl font-bold text-gray-800 mb-2">欢迎使用语音订货</h3>
             <p className="text-gray-500 mb-8 text-sm">点击下方麦克风，直接说出您需要的商品</p>
-            
-            <div className="space-y-3 w-full max-w-xs text-left">
-              <div className="bg-white p-3 rounded-xl shadow-sm text-sm text-gray-700 flex items-center gap-3 border border-gray-100">
-                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">1</span>
-                "来10箱可口可乐"
-              </div>
-              <div className="bg-white p-3 rounded-xl shadow-sm text-sm text-gray-700 flex items-center gap-3 border border-gray-100">
-                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">2</span>
-                "把农夫山泉改成5箱"
-              </div>
-              <div className="bg-white p-3 rounded-xl shadow-sm text-sm text-gray-700 flex items-center gap-3 border border-gray-100">
-                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">3</span>
-                "去掉百事可乐"
-              </div>
-            </div>
           </div>
         ) : (
           <div className="bg-white rounded-xl p-3 shadow-sm">
@@ -683,58 +668,18 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
           {/* Input Field */}
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setInputType(inputType === 'text' ? 'voice' : 'text')}
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 text-gray-600 transition-all shrink-0"
-            >
-              {inputType === 'text' ? <Mic size={18} /> : <Keyboard size={18} />}
-            </button>
-            
             <div className="flex-1 relative">
-              {inputType === 'text' ? (
-                <>
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onFocus={() => setShowSuggestions(true)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="输入商品名称或指令..."
-                    className="w-full h-10 bg-gray-100 rounded-full pl-4 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                  />
-                  {inputValue && (
-                    <button 
-                      onClick={handleSend}
-                      className="absolute right-1 top-1 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center"
-                    >
-                      <Send size={14} className="ml-0.5" />
-                    </button>
-                  )}
-                </>
-              ) : (
-                <button
-                  onClick={toggleRecording}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className={cn(
-                    "w-full h-10 rounded-full font-bold text-sm transition-all select-none",
-                    isRecording ? "bg-gray-300 text-gray-800 shadow-inner" : "bg-gray-100 text-gray-800"
-                  )}
-                >
-                  {isRecording ? "点击 结束" : "点击 说话"}
-                </button>
-              )}
+              <button
+                onClick={toggleRecording}
+                onContextMenu={(e) => e.preventDefault()}
+                className={cn(
+                  "w-full h-10 rounded-full font-bold text-sm transition-all select-none",
+                  isRecording ? "bg-gray-300 text-gray-800 shadow-inner" : "bg-gray-100 text-gray-800"
+                )}
+              >
+                {isRecording ? "点击 结束" : "点击 说话"}
+              </button>
             </div>
-
-            <button 
-              onClick={() => setShowChatHistory(true)}
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 text-gray-600 transition-all shrink-0 relative"
-            >
-              <MessageSquare size={18} />
-              {chatHistory.length > 0 && (
-                <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
-              )}
-            </button>
           </div>
         </div>
       </div>
@@ -761,7 +706,49 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
               <p className="text-white font-medium text-center min-h-[24px] mb-2">
                 {transcript || "正在聆听..."}
               </p>
-              <p className="text-gray-400 text-xs">点击任意处结束</p>
+              <p className="text-gray-400 text-xs mb-6">点击任意处结束</p>
+              
+              <div className="bg-gray-700/50 rounded-xl p-3 text-center border border-gray-600/50 w-full max-w-xs">
+                <p className="text-gray-300 text-xs mb-3 flex items-center justify-center gap-1">
+                  <Sparkles size={12} className="text-blue-400" />
+                  试试这样说 (点击测试)
+                </p>
+                <div className="space-y-2">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsRecording(false);
+                      if (recognitionRef.current) recognitionRef.current.stop();
+                      processInput("来两箱可乐", true);
+                    }}
+                    className="w-full bg-gray-600/50 hover:bg-gray-500/50 transition-colors rounded-lg p-2.5 text-white text-sm font-medium"
+                  >
+                    "来两箱可乐"
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsRecording(false);
+                      if (recognitionRef.current) recognitionRef.current.stop();
+                      processInput("来10箱可口可乐", true);
+                    }}
+                    className="w-full bg-gray-600/50 hover:bg-gray-500/50 transition-colors rounded-lg p-2.5 text-white text-sm font-medium"
+                  >
+                    "来10箱可口可乐"
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsRecording(false);
+                      if (recognitionRef.current) recognitionRef.current.stop();
+                      processInput("把农夫山泉改成5箱", true);
+                    }}
+                    className="w-full bg-gray-600/50 hover:bg-gray-500/50 transition-colors rounded-lg p-2.5 text-white text-sm font-medium"
+                  >
+                    "把农夫山泉改成5箱"
+                  </button>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
