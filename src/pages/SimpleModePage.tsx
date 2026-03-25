@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, MessageSquare, History, Pin } from 'lucide-react';
+import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin, Bot } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { MOCK_PRODUCTS, Product } from '../data/mockDb';
 import { cn } from '../lib/utils';
@@ -10,12 +10,12 @@ interface SimpleModePageProps {
 }
 
 const SUGGESTIONS = [
-  "来两箱可乐 (演示模糊匹配)",
-  "可乐2箱，雪碧3箱，乐事5包 (演示复杂场景)",
-  "来10箱可口可乐",
-  "把农夫山泉改成5箱",
-  "去掉百事可乐",
-  "奥利奥和雪碧各来5箱"
+  "来两枚戒指 (演示模糊匹配)",
+  "戒指2枚，项链3条，手链5条 (演示复杂场景)",
+  "莫桑钻和珍珠项链各来5件 (演示多商品匹配)",
+  "把珍珠项链改成10条 (演示修改数量)",
+  "去掉红宝石手链 (演示删除商品)",
+  "来10枚18K金莫桑钻戒指 (演示精确匹配)"
 ];
 
 export interface ChatMessage {
@@ -24,11 +24,13 @@ export interface ChatMessage {
   content: string;
   type: 'text' | 'voice';
   timestamp: Date;
+  suggestions?: string[];
 }
 
 export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const { items: cartItems, updateQuantity, removeFromCart, addToCart, updateUnit, swapProduct, totalAmount } = useCart();
-  const [swappingItem, setSwappingItem] = useState<any>(null);
+  const [swappingItemId, setSwappingItemId] = useState<string | null>(null);
+  const swappingItem = swappingItemId ? cartItems.find(i => i.productId === swappingItemId) : null;
   const [selectedItemForMatches, setSelectedItemForMatches] = useState<any>(null);
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -43,12 +45,44 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [sortBy, setSortBy] = useState<'time' | 'price' | 'name'>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+
+  // Initialize chat history with welcome message
+  useEffect(() => {
+    if (chatHistory.length === 0) {
+      setChatHistory([
+        {
+          id: 'welcome',
+          role: 'ai',
+          content: '亲爱的小主，我是您的 AI 订货助手小悦 ✨ 很高兴为您服务！您可以直接告诉我您想买什么，或者对购物车里的宝贝进行修改。比如您可以试试这样说：👇',
+          type: 'text',
+          timestamp: new Date(),
+          suggestions: [
+            "来两枚戒指 (演示模糊匹配)",
+            "戒指2枚，项链3条，手链5条 (演示复杂场景)",
+            "莫桑钻和珍珠项链各来5件 (演示多商品匹配)",
+            "把珍珠项链改成10条 (演示修改数量)",
+            "去掉红宝石手链 (演示删除商品)",
+            "来10枚18K金莫桑钻戒指 (演示精确匹配)"
+          ]
+        }
+      ]);
+    }
+  }, [chatHistory.length]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showChatPopup, setShowChatPopup] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
+  const [isCancelZone, setIsCancelZone] = useState(false);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoCloseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto open AI chat when cart is empty
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      setShowChatPopup(true);
+    }
+  }, [cartItems.length]);
 
   // Auto scroll to bottom of chat
   useEffect(() => {
@@ -130,26 +164,47 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     }
   }, [speechError]);
 
-  const toggleRecording = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    
+  useEffect(() => {
     if (isRecording) {
-      // Stop recording
-      setIsRecording(false);
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      if (transcript) {
-        processInput(transcript, true);
-        setTranscript('');
-      }
-      return;
+      const handleGlobalMouseMove = (e: MouseEvent) => {
+        if (touchStartY === null) return;
+        if (touchStartY - e.clientY > 100) {
+          setIsCancelZone(true);
+        } else {
+          setIsCancelZone(false);
+        }
+      };
+
+      const handleGlobalMouseUp = (e: MouseEvent) => {
+        stopRecording(e as any);
+      };
+
+      window.addEventListener('mousemove', handleGlobalMouseMove);
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+
+      return () => {
+        window.removeEventListener('mousemove', handleGlobalMouseMove);
+        window.removeEventListener('mouseup', handleGlobalMouseUp);
+      };
     }
+  }, [isRecording, touchStartY, isCancelZone]);
+
+  const startRecording = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (isRecording) return;
 
     // Start recording
     setSpeechError(null);
     setIsRecording(true);
     setTranscript('');
+    setIsCancelZone(false);
+    
+    // Track touch start position
+    if ('touches' in e.nativeEvent) {
+      setTouchStartY((e.nativeEvent as TouchEvent).touches[0].clientY);
+    } else {
+      setTouchStartY((e.nativeEvent as MouseEvent).clientY);
+    }
     
     if (!hasMicPermission) {
       try {
@@ -170,6 +225,43 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       try {
         recognitionRef.current.start();
       } catch (e) {}
+    }
+  };
+
+  const stopRecording = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!isRecording) return;
+
+    setIsRecording(false);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+
+    if (isCancelZone) {
+      // Cancelled
+      setTranscript('');
+      setIsCancelZone(false);
+      return;
+    }
+
+    if (transcript) {
+      processInput(transcript, true);
+      setTranscript('');
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!isRecording || touchStartY === null) return;
+    
+    const currentY = 'touches' in e.nativeEvent 
+      ? (e.nativeEvent as TouchEvent).touches[0].clientY 
+      : (e.nativeEvent as MouseEvent).clientY;
+    
+    // If slid up more than 100px, enter cancel zone
+    if (touchStartY - currentY > 100) {
+      setIsCancelZone(true);
+    } else {
+      setIsCancelZone(false);
     }
   };
 
@@ -202,7 +294,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       const isComplex = text.includes('，') || text.includes(',') || text.includes(' ');
       
       // If it's a complex multi-item input, we handle it differently
-      if (isComplex && (text.includes('箱') || text.includes('包') || text.includes('件'))) {
+      if (isComplex && (text.includes('枚') || text.includes('条') || text.includes('对') || text.includes('件') || text.includes('颗'))) {
         const parts = text.split(/[，, ]+/);
         let actions: string[] = [];
         
@@ -214,7 +306,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           if (qtyMatch) qty = parseInt(qtyMatch[1], 10);
           
           // Find matches
-          const cleanPart = part.replace(/\d+|箱|包|件|来|个/g, '').trim();
+          const cleanPart = part.replace(/\d+|枚|条|对|件|颗|来|个/g, '').trim();
           if (!cleanPart) return;
           
           const matches = MOCK_PRODUCTS.filter(p => p.name.includes(cleanPart));
@@ -224,7 +316,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             const alternatives = matches.length > 1 ? matches.slice(1) : undefined;
             
             addToCart(bestMatch, qty, alternatives);
-            actions.push(`${qty}件${bestMatch.name}${alternatives ? '(含备选)' : ''}`);
+            actions.push(`${qty}${bestMatch.unit}${bestMatch.name}${alternatives ? '(含备选)' : ''}`);
           }
         });
         
@@ -266,7 +358,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       else if (text.includes('两') || text.includes('二')) qty = 2;
 
       // Check for ambiguous keywords first
-      const ambiguousKeywords = ['可乐', '乐事', '矿泉水', '薯片', '戒指', '莫桑钻', '水'];
+      const ambiguousKeywords = ['戒指', '项链', '手链', '耳饰', '吊坠', '莫桑钻', '珍珠', '珍珠项链'];
       let foundAmbiguous = false;
       
       for (const kw of ambiguousKeywords) {
@@ -310,10 +402,19 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
       // Normal processing
       MOCK_PRODUCTS.forEach(product => {
-        // Very basic keyword matching
-        const keyword = product.name.replace(/ /g, '').slice(0, 4); // basic matching
-        const shortName = product.name.split(' ')[0];
-        if (text.includes(keyword) || text.includes(shortName)) {
+        // Improved keyword matching
+        const name = product.name.toLowerCase();
+        const input = text.toLowerCase();
+        
+        // Match if input contains product name or product name contains input (for short keywords)
+        // Or if input contains a significant part of the name
+        const isMatch = input.includes(name) || 
+                        (input.length >= 2 && name.includes(input)) ||
+                        (name.includes('珍珠项链') && input.includes('珍珠项链')) ||
+                        (name.includes('戒指') && input.includes('戒指')) ||
+                        (name.includes('莫桑钻') && input.includes('莫桑钻'));
+
+        if (isMatch) {
           if (isRemove) {
             removeFromCart(product.id);
             actions.push(`已为您移除 ${product.name}`);
@@ -584,12 +685,12 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         )}
 
         {cartItems.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center px-6 text-center">
-            <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6 shadow-inner">
-              <Mic size={48} className="text-blue-500" />
+          <div className="h-full flex flex-col items-center justify-center px-6 text-center bg-gray-50/50">
+            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-sm border border-gray-100">
+              <ShoppingCart size={48} className="text-gray-200" />
             </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">欢迎使用语音订货</h3>
-            <p className="text-gray-500 mb-8 text-sm">点击下方麦克风，直接说出您需要的商品</p>
+            <h3 className="text-lg font-bold text-gray-400 mb-2">购物车还是空的</h3>
+            <p className="text-gray-300 text-xs">快对小悦说出您想买的商品吧 ✨</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl p-3 shadow-sm">
@@ -663,7 +764,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                       </div>
                       
                       <button 
-                        onClick={() => setSwappingItem(item)}
+                        onClick={() => setSwappingItemId(item.productId)}
                         className="text-[10px] text-[#ff5000] border border-[#ff5000] px-2 py-0.5 rounded flex items-center gap-0.5 bg-orange-50/50 relative"
                       >
                         <span>选规格</span>
@@ -761,8 +862,10 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                   {/* Header */}
                   <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="text-sm font-bold text-gray-800">AI 对话</span>
+                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                      <Bot size={18} className="text-blue-500" />
+                    </div>
+                    <span className="text-sm font-bold text-gray-800">AI 订货助手</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
@@ -792,11 +895,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-4 bg-gray-50/30 max-h-[50vh]">
-                  {chatHistory.length === 0 && !isThinking && (
-                    <div className="text-center py-8 text-gray-400 text-xs italic">
-                      暂无对话记录，试着对我说点什么吧
-                    </div>
-                  )}
                   {chatHistory.map((msg, idx) => (
                     <div key={msg.id} className={cn(
                       "flex flex-col",
@@ -809,6 +907,22 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                           : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
                       )}>
                         {msg.content}
+                        
+                        {msg.suggestions && (
+                          <div className="mt-3 flex flex-col gap-2">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">试试这样说</p>
+                            {msg.suggestions.map((s, i) => (
+                              <button
+                                key={i}
+                                onClick={() => handleSuggestionClick(s)}
+                                className="text-left px-3 py-2 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-100 transition-all flex items-center justify-between group"
+                              >
+                                <span>{s}</span>
+                                <ChevronRight size={12} className="text-blue-300 group-hover:text-blue-500" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="text-[10px] text-gray-400 mt-1 px-1">
                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -847,37 +961,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           )}
         </AnimatePresence>
 
-          {/* Suggestions Popup */}
-          <AnimatePresence>
-            {showSuggestions && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden"
-              >
-                <div className="p-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
-                  <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
-                    <Sparkles size={12} /> 试试这样说
-                  </span>
-                  <button onClick={() => setShowSuggestions(false)} className="text-blue-400 hover:text-blue-600">
-                    <X size={14} />
-                  </button>
-                </div>
-                <div className="p-2 flex flex-col gap-1">
-                  {SUGGESTIONS.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleSuggestionClick(s)}
-                      className="text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                    >
-                      "{s}"
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Suggestions Popup removed as it's now integrated into AI chat */}
 
           {/* Input Field */}
           <div className="flex items-center gap-2">
@@ -892,14 +976,19 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             <div className="flex-1 relative">
               {inputType === 'voice' ? (
                 <button
-                  onClick={toggleRecording}
+                  onMouseDown={startRecording}
+                  onMouseUp={stopRecording}
+                  onMouseMove={handleTouchMove}
+                  onTouchStart={startRecording}
+                  onTouchEnd={stopRecording}
+                  onTouchMove={handleTouchMove}
                   onContextMenu={(e) => e.preventDefault()}
                   className={cn(
-                    "w-full h-10 rounded-full font-bold text-sm transition-all select-none",
-                    isRecording ? "bg-gray-300 text-gray-800 shadow-inner" : "bg-gray-100 text-gray-800"
+                    "w-full h-10 rounded-full font-bold text-sm transition-all select-none touch-none",
+                    isRecording ? "bg-blue-500 text-white shadow-lg scale-[1.02]" : "bg-gray-100 text-gray-800"
                   )}
                 >
-                  {isRecording ? "点击 结束" : "点击 说话"}
+                  {isRecording ? "松开 结束" : "按住 说话"}
                 </button>
               ) : (
                 <div className="flex items-center gap-2">
@@ -909,8 +998,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    onFocus={() => setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    onFocus={() => {}}
                     placeholder="输入商品名称或数量..."
                     className="flex-1 h-10 bg-gray-100 rounded-full px-4 text-sm outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                   />
@@ -938,7 +1026,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 animate={showChatPopup ? { rotate: [0, -10, 10, 0] } : {}}
                 transition={{ duration: 0.5 }}
               >
-                <MessageSquare size={20} />
+                <Bot size={20} />
               </motion.div>
               {chatHistory.length > 0 && !showChatPopup && (
                 <div className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full border border-white"></div>
@@ -952,67 +1040,66 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       <AnimatePresence>
         {isRecording && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm cursor-pointer"
-            onClick={toggleRecording}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-end bg-black/60 backdrop-blur-sm cursor-default pb-32"
           >
-            <div className="bg-gray-800/90 rounded-3xl p-6 flex flex-col items-center max-w-[80%]">
-              <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 relative hover:bg-blue-600 transition-colors">
-                <motion.div 
-                  animate={{ scale: [1, 1.5, 1] }}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                  className="absolute inset-0 bg-blue-500 rounded-full opacity-30"
-                />
-                <Mic size={32} className="text-white relative z-10" />
-              </div>
-              <p className="text-white font-medium text-center min-h-[24px] mb-2">
-                {transcript || "正在聆听..."}
-              </p>
-              <p className="text-gray-400 text-xs mb-6">点击任意处结束</p>
-              
-              <div className="bg-gray-700/50 rounded-xl p-3 text-center border border-gray-600/50 w-full max-w-xs">
-                <p className="text-gray-300 text-xs mb-3 flex items-center justify-center gap-1">
-                  <Sparkles size={12} className="text-blue-400" />
-                  试试这样说 (点击测试)
+            <div className="flex flex-col items-center gap-6 w-full px-6">
+              {/* Transcript / Listening State */}
+              <div className="bg-gray-800/90 rounded-3xl p-6 flex flex-col items-center w-full max-w-sm shadow-2xl border border-white/10">
+                <div className={cn(
+                  "w-16 h-16 rounded-full flex items-center justify-center mb-4 relative transition-all duration-300",
+                  isCancelZone ? "bg-gray-600" : "bg-blue-500"
+                )}>
+                  {!isCancelZone && (
+                    <motion.div 
+                      animate={{ scale: [1, 1.5, 1] }}
+                      transition={{ repeat: Infinity, duration: 1.5 }}
+                      className="absolute inset-0 bg-blue-500 rounded-full opacity-30"
+                    />
+                  )}
+                  <Mic size={32} className="text-white relative z-10" />
+                </div>
+                
+                <p className={cn(
+                  "font-medium text-center min-h-[24px] mb-2 transition-colors",
+                  isCancelZone ? "text-red-400" : "text-white"
+                )}>
+                  {isCancelZone ? "松开取消发送" : (transcript || "正在聆听...")}
                 </p>
-                <div className="space-y-2">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsRecording(false);
-                      if (recognitionRef.current) recognitionRef.current.stop();
-                      processInput("来两箱可乐", true);
-                    }}
-                    className="w-full bg-gray-600/50 hover:bg-gray-500/50 transition-colors rounded-lg p-2.5 text-white text-sm font-medium"
-                  >
-                    "来两箱可乐"
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsRecording(false);
-                      if (recognitionRef.current) recognitionRef.current.stop();
-                      processInput("来10箱可口可乐", true);
-                    }}
-                    className="w-full bg-gray-600/50 hover:bg-gray-500/50 transition-colors rounded-lg p-2.5 text-white text-sm font-medium"
-                  >
-                    "来10箱可口可乐"
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsRecording(false);
-                      if (recognitionRef.current) recognitionRef.current.stop();
-                      processInput("把农夫山泉改成5箱", true);
-                    }}
-                    className="w-full bg-gray-600/50 hover:bg-gray-500/50 transition-colors rounded-lg p-2.5 text-white text-sm font-medium"
-                  >
-                    "把农夫山泉改成5箱"
-                  </button>
+                
+                <p className="text-gray-400 text-xs mb-4">
+                  {isCancelZone ? "已进入取消区域" : "上滑取消发送"}
+                </p>
+                
+                <div className="bg-gray-700/50 rounded-xl p-3 text-center border border-gray-600/50 w-full">
+                  <p className="text-gray-300 text-[10px] mb-2 flex items-center justify-center gap-1 opacity-60">
+                    <Sparkles size={10} className="text-blue-400" />
+                    语音指令示例
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {["来两枚戒指", "珍珠项链5条", "删掉手链"].map((s, i) => (
+                      <span key={i} className="px-2 py-1 bg-gray-600/30 rounded text-[10px] text-gray-300">
+                        "{s}"
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
+
+              {/* Cancel Zone - Flat Pill Shape, closer to bottom */}
+              <motion.div 
+                animate={{ 
+                  scale: isCancelZone ? 1.05 : 1,
+                  backgroundColor: isCancelZone ? "rgba(239, 68, 68, 0.9)" : "rgba(31, 41, 55, 0.8)",
+                  y: isCancelZone ? -5 : 0
+                }}
+                className="w-full max-w-[200px] h-12 rounded-full flex items-center justify-center text-white shadow-lg border border-white/20 gap-2"
+              >
+                <X size={18} className={cn(isCancelZone ? "scale-110" : "")} />
+                <span className="text-sm font-medium">松开 取消</span>
+              </motion.div>
             </div>
           </motion.div>
         )}
@@ -1150,7 +1237,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => setSwappingItem(null)}
+                onClick={() => setSwappingItemId(null)}
                 className="absolute inset-0 bg-black/40 z-[60] backdrop-blur-sm"
               />
               <motion.div 
@@ -1174,7 +1261,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                     </div>
                   </div>
                   <button 
-                    onClick={() => setSwappingItem(null)}
+                    onClick={() => setSwappingItemId(null)}
                     className="p-1 text-gray-300 hover:text-gray-500"
                   >
                     <X size={24} />
@@ -1186,7 +1273,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                   <div>
                     <h4 className="text-sm font-medium text-gray-400 mb-4">单位</h4>
                     <div className="flex flex-wrap gap-3">
-                      {(swappingItem.product.units || ['瓶', '箱']).map((u: string) => (
+                      {(swappingItem.product.units || ['枚', '条', '对', '件', '颗']).map((u: string) => (
                         <button 
                           key={u}
                           onClick={() => updateUnit(swappingItem.productId, u)}
@@ -1240,14 +1327,14 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                     <button 
                       onClick={() => {
                         removeFromCart(swappingItem.productId);
-                        setSwappingItem(null);
+                        setSwappingItemId(null);
                       }}
                       className="flex-1 h-12 border border-gray-200 text-gray-600 rounded-xl font-medium text-base active:bg-gray-50 transition-colors"
                     >
                       移出购物车
                     </button>
                     <button 
-                      onClick={() => setSwappingItem(null)}
+                      onClick={() => setSwappingItemId(null)}
                       className="flex-[1.5] h-12 bg-[#ff5000] text-white rounded-xl font-bold text-base shadow-lg shadow-orange-100 active:scale-[0.98] transition-transform"
                     >
                       确认
