@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin } from 'lucide-react';
+import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin, Bot } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { MOCK_PRODUCTS, Product } from '../data/mockDb';
 import { cn } from '../lib/utils';
@@ -25,12 +25,26 @@ export interface ChatMessage {
   type: 'text' | 'voice';
   timestamp: Date;
   suggestions?: string[];
+  isRead?: boolean;
 }
 
-const CrayfishAIIcon = ({ size = 20, className = "" }: { size?: number, className?: string }) => (
+const BotAIIcon = ({ 
+  size = 20, 
+  className = "", 
+  iconColor = "text-blue-500",
+  badgeColor = "bg-blue-500 text-white border-white"
+}: { 
+  size?: number, 
+  className?: string, 
+  iconColor?: string,
+  badgeColor?: string
+}) => (
   <div className={cn("relative flex items-center justify-center", className)} style={{ width: size, height: size }}>
-    <span style={{ fontSize: size * 0.9 }}>🦞</span>
-    <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-[8px] font-bold px-0.5 rounded leading-none flex items-center justify-center border border-white shadow-sm" style={{ transform: 'scale(0.8)' }}>
+    <Bot size={size} className={iconColor} />
+    <div className={cn(
+      "absolute -top-1 -right-1 text-[8px] font-bold px-0.5 rounded leading-none flex items-center justify-center border shadow-sm",
+      badgeColor
+    )} style={{ transform: 'scale(0.8)' }}>
       AI
     </div>
   </div>
@@ -54,6 +68,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [sortBy, setSortBy] = useState<'time' | 'price' | 'name'>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const unreadCount = chatHistory.filter(msg => msg.role === 'ai' && !msg.isRead).length;
 
   // Initialize chat history with welcome message
   useEffect(() => {
@@ -65,6 +80,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           content: '快对小P说您想买的商品吧。',
           type: 'text',
           timestamp: new Date(),
+          isRead: true, // Welcome message is read by default
           suggestions: [
             "来两枚戒指 (演示模糊匹配)",
             "戒指2枚，项链3条，手链5条 (演示复杂场景)",
@@ -79,6 +95,14 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   }, [chatHistory.length]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showChatPopup, setShowChatPopup] = useState(false);
+
+  // Mark messages as read when chat popup is opened
+  useEffect(() => {
+    if (showChatPopup) {
+      setChatHistory(prev => prev.map(msg => ({ ...msg, isRead: true })));
+    }
+  }, [showChatPopup]);
+
   const [isThinking, setIsThinking] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [isCancelZone, setIsCancelZone] = useState(false);
@@ -335,7 +359,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             role: 'user',
             content: text,
             type: isVoice ? 'voice' : 'text',
-            timestamp: new Date()
+            timestamp: new Date(),
+            isRead: true
           };
 
           const newAiMsg: ChatMessage = {
@@ -343,7 +368,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             role: 'ai',
             content: `已为您添加：${actions.join('、')}。部分商品有多个匹配项，您可以在购物车中点击“更多选项”进行更换。`,
             type: 'text',
-            timestamp: new Date()
+            timestamp: new Date(),
+            isRead: showChatPopup
           };
 
           setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
@@ -393,7 +419,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           role: 'user',
           content: text,
           type: isVoice ? 'voice' : 'text',
-          timestamp: new Date()
+          timestamp: new Date(),
+          isRead: true
         };
 
         const newAiMsg: ChatMessage = {
@@ -401,7 +428,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           role: 'ai',
           content: `找到多个包含该名称的商品，请选择您需要哪一个？`,
           type: 'text',
-          timestamp: new Date()
+          timestamp: new Date(),
+          isRead: showChatPopup
         };
 
         setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
@@ -452,7 +480,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         role: 'user',
         content: text,
         type: isVoice ? 'voice' : 'text',
-        timestamp: new Date()
+        timestamp: new Date(),
+        isRead: true
       };
 
       const newAiMsg: ChatMessage = {
@@ -460,7 +489,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         role: 'ai',
         content: aiResponse,
         type: 'text',
-        timestamp: new Date()
+        timestamp: new Date(),
+        isRead: showChatPopup
       };
 
       setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
@@ -496,7 +526,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       role: 'user',
       content: `选择了: ${product.name}`,
       type: 'text',
-      timestamp: new Date()
+      timestamp: new Date(),
+      isRead: true
     };
 
     const newAiMsg: ChatMessage = {
@@ -504,7 +535,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       role: 'ai',
       content: actionText,
       type: 'text',
-      timestamp: new Date()
+      timestamp: new Date(),
+      isRead: showChatPopup
     };
 
     setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
@@ -699,7 +731,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
               <ShoppingCart size={48} className="text-gray-200" />
             </div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">购物车还是空的</h3>
-            <p className="text-gray-300 text-xs">快对小悦说出您想买的商品吧 ✨</p>
+            <p className="text-gray-300 text-xs">快对小P说出您想买的商品吧 ✨</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl p-3 shadow-sm">
@@ -745,36 +777,28 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                       <span className="align-middle">{item.product.name}</span>
                     </h3>
                     
-                    {/* Units Selection on Card */}
-                    {item.product.units && (
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <div className="flex gap-2">
-                          {item.product.units.map(u => (
-                            <button 
-                              key={u}
-                              onClick={() => updateUnit(item.productId, u)}
-                              className={cn(
-                                "px-2 py-0.5 rounded text-[10px] border transition-all",
-                                item.product.unit === u 
-                                  ? "bg-[#ff5000] border-[#ff5000] text-white shadow-sm font-bold" 
-                                  : "bg-white border-gray-200 text-gray-500"
-                              )}
-                            >
-                              {u}
-                            </button>
-                          ))}
-                        </div>
+                    {/* Units Selection & Specs Button on same row */}
+                    <div className="flex items-center justify-between mt-1.5">
+                      <div className="flex gap-2">
+                        {item.product.units && item.product.units.map(u => (
+                          <button 
+                            key={u}
+                            onClick={() => updateUnit(item.productId, u)}
+                            className={cn(
+                              "px-2 py-0.5 rounded text-[10px] border transition-all",
+                              item.product.unit === u 
+                                ? "bg-[#ff5000] border-[#ff5000] text-white shadow-sm font-bold" 
+                                : "bg-white border-gray-200 text-gray-500"
+                            )}
+                          >
+                            {u}
+                          </button>
+                        ))}
                       </div>
-                    )}
 
-                    <div className="flex items-center justify-between mt-1">
-                      <div className="text-[#ff5000] font-bold text-base">
-                        ¥{item.product.price}<span className="text-[10px] font-normal text-gray-400 ml-0.5">/{item.product.unit}</span>
-                      </div>
-                      
                       <button 
                         onClick={() => setSwappingItemId(item.productId)}
-                        className="text-[10px] text-[#ff5000] border border-[#ff5000] px-2 py-0.5 rounded flex items-center gap-0.5 bg-orange-50/50 relative"
+                        className="text-[10px] text-[#ff5000] border border-[#ff5000] px-2 py-0.5 rounded flex items-center gap-0.5 bg-orange-50/50 relative shrink-0"
                       >
                         <span>选规格</span>
                         {/* Multiple matches badge */}
@@ -785,29 +809,33 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                         )}
                       </button>
                     </div>
-                  </div>
-                
-                <div className="flex justify-end items-end mt-2">
-                  {/* Quantity Control */}
-                  <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden h-7">
-                    <button 
-                      onClick={() => updateQuantity(item.productId, -1)}
-                      className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 active:bg-gray-300 transition-colors"
-                    >
-                      <Minus size={12} />
-                    </button>
-                    <span className="w-8 text-center text-xs font-bold text-gray-800">
-                      {item.quantity}
-                    </span>
-                    <button 
-                      onClick={() => updateQuantity(item.productId, 1)}
-                      className="w-8 h-full flex items-center justify-center bg-gray-300/50 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
-                    >
-                      <Plus size={12} />
-                    </button>
+
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="text-[#ff5000] font-bold text-base">
+                        ¥{item.product.price}<span className="text-[10px] font-normal text-gray-400 ml-0.5">/{item.product.unit}</span>
+                      </div>
+                      
+                      {/* Quantity Control moved up to price row */}
+                      <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden h-7">
+                        <button 
+                          onClick={() => updateQuantity(item.productId, -1)}
+                          className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 active:bg-gray-300 transition-colors"
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <span className="w-8 text-center text-xs font-bold text-gray-800">
+                          {item.quantity}
+                        </span>
+                        <button 
+                          onClick={() => updateQuantity(item.productId, 1)}
+                          className="w-8 h-full flex items-center justify-center bg-gray-300/50 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
               </motion.div>
             ))}
             <div className="text-center text-xs text-gray-400 mt-4 mb-2 flex items-center justify-center gap-2">
@@ -872,7 +900,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                   <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                      <CrayfishAIIcon size={22} />
+                      <BotAIIcon size={22} />
                     </div>
                     <span className="text-sm font-bold text-gray-800">小P 订货助手</span>
                   </div>
@@ -1035,10 +1063,16 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 animate={showChatPopup ? { rotate: [0, -10, 10, 0] } : {}}
                 transition={{ duration: 0.5 }}
               >
-                <CrayfishAIIcon size={24} />
+                <BotAIIcon 
+                  size={24} 
+                  iconColor={showChatPopup ? "text-white" : "text-blue-500"} 
+                  badgeColor={showChatPopup ? "bg-white text-blue-500 border-blue-500" : "bg-blue-500 text-white border-white"}
+                />
               </motion.div>
-              {chatHistory.length > 0 && !showChatPopup && (
-                <div className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full border border-white"></div>
+              {unreadCount > 0 && !showChatPopup && (
+                <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center px-1 shadow-sm">
+                  {unreadCount}
+                </div>
               )}
             </button>
           </div>

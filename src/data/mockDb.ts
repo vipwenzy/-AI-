@@ -168,6 +168,106 @@ export const MOCK_PRODUCTS: Product[] = [
     image: 'https://images.unsplash.com/photo-1601121141461-9d6647bca1ed?w=400&q=80',
     category: '吊坠',
     inventory: 800
+  },
+  {
+    id: '15',
+    name: '18K金莫桑钻项链',
+    price: 2880.00,
+    unit: '条',
+    units: ['条', '件'],
+    image: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400&q=80',
+    category: '项链',
+    inventory: 45
+  },
+  {
+    id: '16',
+    name: '铂金PT950钻石耳钉',
+    price: 4500.00,
+    unit: '对',
+    units: ['对', '件'],
+    image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=400&q=80',
+    category: '耳饰',
+    inventory: 30
+  },
+  {
+    id: '17',
+    name: '翡翠玉镯',
+    price: 8800.00,
+    unit: '只',
+    units: ['只', '件'],
+    image: 'https://images.unsplash.com/photo-1615655096345-64a0ae97d1ba?w=400&q=80',
+    category: '手镯',
+    inventory: 15
+  },
+  {
+    id: '18',
+    name: '黄金手镯',
+    price: 12500.00,
+    unit: '只',
+    units: ['只', '克'],
+    image: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=400&q=80',
+    category: '足金',
+    inventory: 10
+  },
+  {
+    id: '19',
+    name: '莫桑钻皇冠戒指',
+    price: 3599.00,
+    unit: '枚',
+    units: ['枚', '件'],
+    image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400&q=80',
+    category: '戒指',
+    inventory: 25
+  },
+  {
+    id: '20',
+    name: '银制长命锁',
+    price: 388.00,
+    unit: '件',
+    units: ['件', '个'],
+    image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=400&q=80',
+    category: '吊坠',
+    inventory: 150
+  },
+  {
+    id: '21',
+    name: '18K金莫桑钻手链',
+    price: 1980.00,
+    unit: '条',
+    units: ['条', '件'],
+    image: 'https://images.unsplash.com/photo-1611085583191-a3b13b24424a?w=400&q=80',
+    category: '手链',
+    inventory: 60
+  },
+  {
+    id: '22',
+    name: '珍珠耳钉',
+    price: 580.00,
+    unit: '对',
+    units: ['对', '件'],
+    image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&q=80',
+    category: '耳饰',
+    inventory: 200
+  },
+  {
+    id: '23',
+    name: '18K金莫桑钻吊坠',
+    price: 1280.00,
+    unit: '件',
+    units: ['件', '个'],
+    image: 'https://images.unsplash.com/photo-1601121141461-9d6647bca1ed?w=400&q=80',
+    category: '吊坠',
+    inventory: 100
+  },
+  {
+    id: '24',
+    name: '铂金PT950项链',
+    price: 3200.00,
+    unit: '条',
+    units: ['条', '件'],
+    image: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400&q=80',
+    category: '项链',
+    inventory: 40
   }
 ];
 

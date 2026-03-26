@@ -10,7 +10,7 @@ export default function ShopPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const { addToCart, updateQuantity, items: cartItems } = useCart();
 
-  const categories = ['全部', '买过', '推荐', '铜饰品', '空托', '足金', 'K金', '钻石'];
+  const categories = ['全部', '买过', '推荐', ...Array.from(new Set(MOCK_PRODUCTS.map(p => p.category)))];
 
   const getQuantity = (productId: string) => {
     return cartItems.find(item => item.productId === productId)?.quantity || 0;
