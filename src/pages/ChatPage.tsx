@@ -66,7 +66,7 @@ const ProductSelector = ({
             )}
           >
             <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-100">
-              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+              <img src={product.image} alt={product.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
             </div>
             <div className="flex-1">
               <div className="font-semibold text-gray-900">{product.name}</div>
@@ -145,7 +145,7 @@ const OrderDraftCard = ({
             return (
               <div key={index} className="p-4 flex gap-3 group/item hover:bg-gray-50 transition-colors">
                 <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-200">
-                  <img src={product.image} className="w-full h-full object-cover mix-blend-multiply" />
+                  <img src={product.image} referrerPolicy="no-referrer" className="w-full h-full object-cover mix-blend-multiply" />
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-between">
                   <div className="flex justify-between items-start">
@@ -380,7 +380,7 @@ const ProductListCard = ({
                   {((product.price / product.originalPrice) * 10).toFixed(1)}折
                 </div>
               )}
-              <img src={product.image} alt={product.name} className="w-full h-full object-cover mix-blend-multiply" />
+              <img src={product.image} alt={product.name} referrerPolicy="no-referrer" className="w-full h-full object-cover mix-blend-multiply" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>

@@ -183,7 +183,7 @@ export default function OrdersPage({ onBack, initialOrderId }: { onBack?: () => 
               {itemsToShow.map((item, idx) => (
                 <div key={idx} className="flex items-start gap-3">
                   <div className="w-16 h-16 bg-gray-50 rounded-lg overflow-hidden shrink-0 border border-gray-100">
-                    <img src={item.image} className="w-full h-full object-cover mix-blend-multiply" />
+                    <img src={item.image} referrerPolicy="no-referrer" className="w-full h-full object-cover mix-blend-multiply" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 line-clamp-2 mb-1">{item.name}</div>

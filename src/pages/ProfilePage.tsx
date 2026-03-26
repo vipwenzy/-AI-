@@ -43,7 +43,7 @@ export default function ProfilePage({ initialRoute }: { initialRoute?: string })
         <div className="px-6 flex items-center gap-4 relative z-10">
           <div className="w-20 h-20 rounded-full p-1 bg-white/20 backdrop-blur-sm shrink-0">
             <div className="w-full h-full rounded-full bg-white overflow-hidden border-2 border-white shadow-lg relative group cursor-pointer">
-              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" className="w-full h-full bg-gray-50 object-cover" />
+              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" referrerPolicy="no-referrer" className="w-full h-full bg-gray-50 object-cover" />
               <div className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
                 <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
               </div>
