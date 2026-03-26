@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin, Bot } from 'lucide-react';
+import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin, Bot, Maximize2, Minimize2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { MOCK_PRODUCTS, Product } from '../data/mockDb';
 import { cn } from '../lib/utils';
@@ -104,7 +104,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   }, [showChatPopup]);
 
   const [isThinking, setIsThinking] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isCancelZone, setIsCancelZone] = useState(false);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -165,13 +165,18 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         };
 
         recognitionRef.current.onerror = (event: any) => {
-          console.error('Speech recognition error', event.error);
           if (event.error === 'not-allowed') {
             setSpeechError('请允许使用麦克风以进行语音输入');
+            console.warn('Speech recognition permission denied');
+          } else if (event.error === 'no-speech') {
+            // Silently handle no-speech
+            console.log('No speech detected, stopping recognition');
           } else {
+            console.error('Speech recognition error:', event.error);
             setSpeechError('语音识别出错，请重试');
           }
           setIsRecording(false);
+          setTranscript('');
         };
       } catch (err) {
         console.error('Failed to initialize speech recognition:', err);
@@ -307,9 +312,9 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       clearTimeout(autoCloseTimeoutRef.current);
     }
 
-    // Auto collapse after a delay if not pinned
+    // Auto collapse after a delay if not fullscreen
     autoCloseTimeoutRef.current = setTimeout(() => {
-      if (!isPinned) {
+      if (!isFullscreen) {
         setShowChatPopup(false);
       }
     }, 2000);
@@ -651,7 +656,219 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#f5f5f9] relative">
+    <div className="flex flex-col h-full bg-[#f5f5f9] relative overflow-hidden">
+      {/* AI对话 Popup (Conversation History & Processing) - Moved to top level for better control */}
+      <AnimatePresence>
+        {showChatPopup && (
+          <>
+            {/* Click-outside-to-close backdrop (only for docked mode) */}
+            {!isFullscreen && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowChatPopup(false)}
+                className="absolute inset-0 bottom-[64px] z-40 bg-black/20"
+              />
+            )}
+            
+            <motion.div 
+              initial={isFullscreen ? { opacity: 0 } : { opacity: 0, height: 0, y: 10 }}
+              animate={isFullscreen 
+                ? { opacity: 1, height: '100%', y: 0, bottom: 0, top: 0, left: 0, right: 0, borderRadius: 0 } 
+                : { opacity: 1, height: 'auto', y: 0, bottom: 64, top: 'auto', left: 0, right: 0, borderRadius: '24px 24px 0 0' }
+              }
+              exit={{ opacity: 0, height: 0, y: 10 }}
+              className={cn(
+                "bg-white shadow-[0_-15px_40px_rgba(0,0,0,0.12)] border-t border-blue-50 overflow-hidden z-50 flex flex-col absolute",
+                isFullscreen ? "inset-0" : "left-0 right-0 max-h-[calc(100%-100px)]"
+              )}
+            >
+              {/* Header */}
+              <div className={cn(
+                "p-3 border-b border-gray-100 flex items-center justify-between bg-white shrink-0",
+                isFullscreen && "pt-6 pb-4 px-6" 
+              )}>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                    <BotAIIcon size={22} />
+                  </div>
+                  <span className={cn("text-sm font-bold text-gray-800", isFullscreen && "text-base")}>小P 订货助手</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setChatHistory([])}
+                    className="text-[10px] text-blue-600 font-medium px-2 py-1 rounded-full bg-blue-50 hover:bg-blue-100 transition-colors"
+                  >
+                    新建对话
+                  </button>
+                  <button 
+                    onClick={() => setIsFullscreen(!isFullscreen)}
+                    className={cn(
+                      "p-1.5 rounded-full transition-colors",
+                      isFullscreen ? "bg-blue-100 text-blue-600" : "text-gray-400 hover:bg-gray-100"
+                    )}
+                    title={isFullscreen ? "退出全屏" : "全屏对话"}
+                  >
+                    {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowChatPopup(false);
+                      setIsFullscreen(false);
+                    }}
+                    className="p-1.5 rounded-full text-gray-400 hover:bg-gray-100 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className={cn(
+                "flex-1 overflow-y-auto p-3 space-y-4 bg-gray-50/30",
+                isFullscreen ? "px-6" : "max-h-[45vh]"
+              )}>
+                {chatHistory.map((msg, idx) => (
+                  <div key={msg.id} className={cn(
+                    "flex flex-col",
+                    msg.role === 'user' ? "items-end" : "items-start"
+                  )}>
+                    <div className={cn(
+                      "px-3 py-2 rounded-2xl text-sm max-w-[85%] shadow-sm",
+                      msg.role === 'user' 
+                        ? "bg-blue-500 text-white rounded-tr-none" 
+                        : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
+                    )}>
+                      {msg.content}
+                      
+                      {msg.suggestions && (
+                        <div className="mt-3 flex flex-col gap-2">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">试试这样说</p>
+                          {msg.suggestions.map((s, i) => (
+                            <button
+                              key={i}
+                              onClick={() => handleSuggestionClick(s)}
+                              className="text-left px-3 py-2 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-100 transition-all flex items-center justify-between group"
+                            >
+                              <span>{s}</span>
+                              <ChevronRight size={12} className="text-blue-300 group-hover:text-blue-500" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-1 px-1">
+                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                ))}
+                
+                {isThinking && (
+                  <div className="flex flex-col items-start">
+                    <div className="bg-white text-gray-800 px-3 py-2 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <motion.div 
+                          animate={{ y: [0, -4, 0] }}
+                          transition={{ repeat: Infinity, duration: 0.6, delay: 0 }}
+                          className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ y: [0, -4, 0] }}
+                          transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
+                          className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ y: [0, -4, 0] }}
+                          transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
+                          className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
+                        />
+                      </div>
+                      <span className="text-xs text-gray-500 font-medium">小P 正在思考中...</span>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input bar inside fullscreen chat */}
+              {isFullscreen && (
+                <div className="px-4 py-3 bg-white border-t border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2">
+                    {/* Toggle Input Mode */}
+                    <button 
+                      onClick={() => setInputType(inputType === 'voice' ? 'text' : 'voice')}
+                      className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors shrink-0"
+                    >
+                      {inputType === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
+                    </button>
+
+                    <div className="flex-1 relative">
+                      {inputType === 'voice' ? (
+                        <button
+                          onMouseDown={startRecording}
+                          onMouseUp={stopRecording}
+                          onMouseMove={handleTouchMove}
+                          onTouchStart={startRecording}
+                          onTouchEnd={stopRecording}
+                          onTouchMove={handleTouchMove}
+                          onContextMenu={(e) => e.preventDefault()}
+                          className={cn(
+                            "w-full h-10 rounded-full font-bold text-sm transition-all select-none touch-none",
+                            isRecording ? "bg-blue-500 text-white shadow-lg scale-[1.02]" : "bg-gray-100 text-gray-800"
+                          )}
+                        >
+                          {isRecording ? "松开 结束" : "按住 说话"}
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                            placeholder="输入商品名称或数量..."
+                            className="flex-1 h-10 bg-gray-100 rounded-full px-4 text-sm outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                          />
+                          {inputValue.trim() && (
+                            <button
+                              onClick={handleSend}
+                              className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 active:scale-95 transition-all shrink-0"
+                            >
+                              <Send size={18} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* AI对话 Button (Toggle/Close) */}
+                    <button 
+                      onClick={() => {
+                        setShowChatPopup(false);
+                        setIsFullscreen(false);
+                      }}
+                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 relative bg-blue-500 text-white shadow-lg scale-110"
+                    >
+                      <motion.div
+                        animate={{ rotate: [0, -10, 10, 0] }}
+                        transition={{ duration: 0.5 }}
+                      >
+                        <BotAIIcon 
+                          size={24} 
+                          iconColor="text-white" 
+                          badgeColor="bg-white text-blue-500 border-blue-500"
+                        />
+                      </motion.div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="h-14 bg-[#f5f5f9] border-b border-gray-200 flex items-center justify-between px-4 shrink-0 z-10">
         <div className="flex items-center gap-2">
@@ -677,7 +894,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       </div>
 
       {/* Cart Area (Always visible) */}
-      <div className="flex-1 overflow-y-auto p-4 pb-40">
+      <div className="flex-1 overflow-y-auto p-4 pb-4">
         {cartItems.length > 0 && (
           <div className="flex items-center justify-between mb-3 px-1">
             <span className="text-sm text-gray-500">共 {cartItems.length} 件商品</span>
@@ -842,234 +1059,80 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       </div>
 
       {/* Bottom Input Area */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-0 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
-        
-        {/* Order Summary Bar */}
-        {cartItems.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">共 {cartItems.length} 件商品</span>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-end">
-                <div className="text-sm">
-                  总额: <span className="font-bold text-lg text-[#ff5000]">{totalAmount.toFixed(2)}</span>
-                </div>
-              </div>
-              <button 
-                onClick={() => {
-                  setShowCheckout(true);
-                }}
-                className="bg-[#ff5000] text-white px-8 py-2 rounded-full font-bold text-base hover:bg-[#e64800] active:bg-[#cc4000] shadow-md"
+      <div className="px-4 py-3 bg-white relative shrink-0 border-t border-gray-100 z-50">
+        <div className="flex items-center gap-2">
+          {/* Toggle Input Mode */}
+          <button 
+            onClick={() => setInputType(inputType === 'voice' ? 'text' : 'voice')}
+            className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors shrink-0"
+          >
+            {inputType === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
+          </button>
+
+          <div className="flex-1 relative">
+            {inputType === 'voice' ? (
+              <button
+                onMouseDown={startRecording}
+                onMouseUp={stopRecording}
+                onMouseMove={handleTouchMove}
+                onTouchStart={startRecording}
+                onTouchEnd={stopRecording}
+                onTouchMove={handleTouchMove}
+                onContextMenu={(e) => e.preventDefault()}
+                className={cn(
+                  "w-full h-10 rounded-full font-bold text-sm transition-all select-none touch-none",
+                  isRecording ? "bg-blue-500 text-white shadow-lg scale-[1.02]" : "bg-gray-100 text-gray-800"
+                )}
               >
-                下单
+                {isRecording ? "松开 结束" : "按住 说话"}
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Input Field Area */}
-        <div className="px-4 py-3 bg-white relative">
-          {/* AI对话 Popup (Conversation History & Processing) - Docked version */}
-          <AnimatePresence>
-            {showChatPopup && (
-              <>
-                {/* Click-outside-to-close backdrop */}
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setShowChatPopup(false)}
-                  className="fixed inset-0 z-20"
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="输入商品名称或数量..."
+                  className="flex-1 h-10 bg-gray-100 rounded-full px-4 text-sm outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                 />
-                
-                <motion.div 
-                  initial={{ opacity: 0, height: 0, y: 10 }}
-                  animate={{ opacity: 1, height: 'auto', y: 0 }}
-                  exit={{ opacity: 0, height: 0, y: 10 }}
-                  className="absolute bottom-full left-0 right-0 bg-white rounded-t-2xl shadow-[0_-15px_40px_rgba(0,0,0,0.12)] border-t border-blue-50 overflow-hidden z-30 flex flex-col"
-                >
-                  {/* Header */}
-                  <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-white">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                      <BotAIIcon size={22} />
-                    </div>
-                    <span className="text-sm font-bold text-gray-800">小P 订货助手</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => setChatHistory([])}
-                      className="text-[10px] text-blue-600 font-medium px-2 py-1 rounded-full bg-blue-50 hover:bg-blue-100 transition-colors"
-                    >
-                      新建对话
-                    </button>
-                    <button 
-                      onClick={() => setIsPinned(!isPinned)}
-                      className={cn(
-                        "p-1.5 rounded-full transition-colors",
-                        isPinned ? "bg-blue-100 text-blue-600" : "text-gray-400 hover:bg-gray-100"
-                      )}
-                      title={isPinned ? "取消置顶" : "置顶对话"}
-                    >
-                      <Pin size={14} className={cn(isPinned && "fill-current")} />
-                    </button>
-                    <button 
-                      onClick={() => setShowChatPopup(false)}
-                      className="p-1.5 rounded-full text-gray-400 hover:bg-gray-100 transition-colors"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-3 space-y-4 bg-gray-50/30 max-h-[50vh]">
-                  {chatHistory.map((msg, idx) => (
-                    <div key={msg.id} className={cn(
-                      "flex flex-col",
-                      msg.role === 'user' ? "items-end" : "items-start"
-                    )}>
-                      <div className={cn(
-                        "px-3 py-2 rounded-2xl text-sm max-w-[85%] shadow-sm",
-                        msg.role === 'user' 
-                          ? "bg-blue-500 text-white rounded-tr-none" 
-                          : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
-                      )}>
-                        {msg.content}
-                        
-                        {msg.suggestions && (
-                          <div className="mt-3 flex flex-col gap-2">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">试试这样说</p>
-                            {msg.suggestions.map((s, i) => (
-                              <button
-                                key={i}
-                                onClick={() => handleSuggestionClick(s)}
-                                className="text-left px-3 py-2 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-100 transition-all flex items-center justify-between group"
-                              >
-                                <span>{s}</span>
-                                <ChevronRight size={12} className="text-blue-300 group-hover:text-blue-500" />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-gray-400 mt-1 px-1">
-                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {isThinking && (
-                    <div className="flex flex-col items-start">
-                      <div className="bg-white text-gray-800 px-3 py-2 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2">
-                        <div className="flex gap-1">
-                          <motion.div 
-                            animate={{ y: [0, -4, 0] }}
-                            transition={{ repeat: Infinity, duration: 0.6, delay: 0 }}
-                            className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
-                          />
-                          <motion.div 
-                            animate={{ y: [0, -4, 0] }}
-                            transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
-                            className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
-                          />
-                          <motion.div 
-                            animate={{ y: [0, -4, 0] }}
-                            transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
-                            className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
-                          />
-                        </div>
-                        <span className="text-xs text-gray-500 font-medium">小P 正在思考中...</span>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-
-          {/* Suggestions Popup removed as it's now integrated into AI chat */}
-
-          {/* Input Field */}
-          <div className="flex items-center gap-2">
-            {/* Toggle Input Mode */}
-            <button 
-              onClick={() => setInputType(inputType === 'voice' ? 'text' : 'voice')}
-              className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors shrink-0"
-            >
-              {inputType === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
-            </button>
-
-            <div className="flex-1 relative">
-              {inputType === 'voice' ? (
-                <button
-                  onMouseDown={startRecording}
-                  onMouseUp={stopRecording}
-                  onMouseMove={handleTouchMove}
-                  onTouchStart={startRecording}
-                  onTouchEnd={stopRecording}
-                  onTouchMove={handleTouchMove}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className={cn(
-                    "w-full h-10 rounded-full font-bold text-sm transition-all select-none touch-none",
-                    isRecording ? "bg-blue-500 text-white shadow-lg scale-[1.02]" : "bg-gray-100 text-gray-800"
-                  )}
-                >
-                  {isRecording ? "松开 结束" : "按住 说话"}
-                </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    onFocus={() => {}}
-                    placeholder="输入商品名称或数量..."
-                    className="flex-1 h-10 bg-gray-100 rounded-full px-4 text-sm outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                  />
-                  {inputValue.trim() && (
-                    <button
-                      onClick={handleSend}
-                      className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 active:scale-95 transition-all shrink-0"
-                    >
-                      <Send size={18} />
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* AI对话 Button */}
-            <button 
-              onClick={() => setShowChatPopup(!showChatPopup)}
-              className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 relative",
-                showChatPopup ? "bg-blue-500 text-white shadow-lg scale-110" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              )}
-            >
-              <motion.div
-                animate={showChatPopup ? { rotate: [0, -10, 10, 0] } : {}}
-                transition={{ duration: 0.5 }}
-              >
-                <BotAIIcon 
-                  size={24} 
-                  iconColor={showChatPopup ? "text-white" : "text-blue-500"} 
-                  badgeColor={showChatPopup ? "bg-white text-blue-500 border-blue-500" : "bg-blue-500 text-white border-white"}
-                />
-              </motion.div>
-              {unreadCount > 0 && !showChatPopup && (
-                <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center px-1 shadow-sm">
-                  {unreadCount}
-                </div>
-              )}
-            </button>
+                {inputValue.trim() && (
+                  <button
+                    onClick={handleSend}
+                    className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 active:scale-95 transition-all shrink-0"
+                  >
+                    <Send size={18} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* AI对话 Button */}
+          <button 
+            onClick={() => setShowChatPopup(!showChatPopup)}
+            className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 relative",
+              showChatPopup ? "bg-blue-500 text-white shadow-lg scale-110" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            )}
+          >
+            <motion.div
+              animate={showChatPopup ? { rotate: [0, -10, 10, 0] } : {}}
+              transition={{ duration: 0.5 }}
+            >
+              <BotAIIcon 
+                size={24} 
+                iconColor={showChatPopup ? "text-white" : "text-blue-500"} 
+                badgeColor={showChatPopup ? "bg-white text-blue-500 border-blue-500" : "bg-blue-500 text-white border-white"}
+              />
+            </motion.div>
+            {unreadCount > 0 && !showChatPopup && (
+              <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center px-1 shadow-sm">
+                {unreadCount}
+              </div>
+            )}
+          </button>
         </div>
       </div>
 
