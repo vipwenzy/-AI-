@@ -69,7 +69,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const swapProduct = (oldProductId: string, newProduct: Product) => {
     setItems(prev => prev.map(item => {
       if (item.productId === oldProductId) {
-        return { ...item, productId: newProduct.id, product: newProduct };
+        const oldProduct = item.product;
+        // Move old product to alternatives and remove new product from alternatives
+        const currentAlternatives = item.alternatives || [];
+        const newAlternatives = [
+          ...currentAlternatives.filter(p => p.id !== newProduct.id),
+          oldProduct
+        ];
+        
+        return { 
+          ...item, 
+          productId: newProduct.id, 
+          product: newProduct,
+          alternatives: newAlternatives
+        };
       }
       return item;
     }));

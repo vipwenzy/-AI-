@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin, Bot, Maximize2, Minimize2 } from 'lucide-react';
+import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin, Bot, Maximize2, Minimize2, Zap, Gift, RotateCcw } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { MOCK_PRODUCTS, Product } from '../data/mockDb';
 import { cn } from '../lib/utils';
@@ -10,22 +10,25 @@ interface SimpleModePageProps {
 }
 
 const SUGGESTIONS = [
-  "来两枚戒指 (演示模糊匹配)",
-  "戒指2枚，项链3条，手链5条 (演示复杂场景)",
-  "莫桑钻和珍珠项链各来5件 (演示多商品匹配)",
-  "把珍珠项链改成10条 (演示修改数量)",
-  "去掉红宝石手链 (演示删除商品)",
-  "来10枚18K金莫桑钻戒指 (演示精确匹配)"
+  "来两枚戒指 (模糊匹配)",
+  "戒指2枚，项链3条，手链5条 (复杂场景)",
+  "把珍珠项链改成10条 (修改数量)",
+  "去掉红宝石手链 (删除商品)",
+  "按上个订单再来一单 (一键补货)"
 ];
 
 export interface ChatMessage {
   id: string;
   role: 'user' | 'ai';
   content: string;
-  type: 'text' | 'voice';
+  type: 'text' | 'voice' | 'recommendation';
   timestamp: Date;
   suggestions?: string[];
   isRead?: boolean;
+  recommendations?: {
+    title: string;
+    products: Product[];
+  };
 }
 
 const BotAIIcon = ({ 
@@ -50,7 +53,65 @@ const BotAIIcon = ({
   </div>
 );
 
+const RecommendationList = ({ 
+  products, 
+  onAddToCart 
+}: { 
+  products: Product[], 
+  onAddToCart: (p: Product, e: React.MouseEvent) => void 
+}) => {
+  const [activeTab, setActiveTab] = useState('全部');
+  const categories = ['全部', ...Array.from(new Set(products.map(p => p.category)))];
+  
+  const filteredProducts = activeTab === '全部' 
+    ? products 
+    : products.filter(p => p.category === activeTab);
+
+  return (
+    <div className="mt-2 bg-gray-50 rounded-xl border border-gray-100 overflow-hidden flex flex-col max-h-[320px]">
+      <div className="p-2 border-b border-gray-100 bg-white sticky top-0 z-10">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveTab(cat)}
+              className={cn(
+                "px-3 py-1 rounded-full text-[10px] whitespace-nowrap transition-all",
+                activeTab === cat 
+                  ? "bg-blue-500 text-white font-bold shadow-sm" 
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-2 no-scrollbar">
+        {filteredProducts.map(product => (
+          <div key={product.id} className="flex gap-2 p-2 rounded-lg bg-white border border-gray-50 shadow-sm">
+            <img src={product.image} alt={product.name} referrerPolicy="no-referrer" className="w-12 h-12 rounded-md object-cover bg-gray-50 shrink-0" />
+            <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+              <div className="font-bold text-[11px] text-gray-800 truncate">{product.name}</div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#ff5000] font-bold text-xs">¥{product.price}</span>
+                <button 
+                  onClick={(e) => onAddToCart(product, e)}
+                  className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center active:scale-90 transition-transform"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const { items: cartItems, updateQuantity, removeFromCart, addToCart, updateUnit, swapProduct, totalAmount } = useCart();
   const [swappingItemId, setSwappingItemId] = useState<string | null>(null);
   const swappingItem = swappingItemId ? cartItems.find(i => i.productId === swappingItemId) : null;
@@ -68,6 +129,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [sortBy, setSortBy] = useState<'time' | 'price' | 'name'>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [flyingItems, setFlyingItems] = useState<{ id: number, x: number, y: number, image: string }[]>([]);
   const unreadCount = chatHistory.filter(msg => msg.role === 'ai' && !msg.isRead).length;
 
   // Initialize chat history with welcome message
@@ -82,12 +144,11 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           timestamp: new Date(),
           isRead: true, // Welcome message is read by default
           suggestions: [
-            "来两枚戒指 (演示模糊匹配)",
-            "戒指2枚，项链3条，手链5条 (演示复杂场景)",
-            "莫桑钻和珍珠项链各来5件 (演示多商品匹配)",
-            "把珍珠项链改成10条 (演示修改数量)",
-            "去掉红宝石手链 (演示删除商品)",
-            "来10枚18K金莫桑钻戒指 (演示精确匹配)"
+            "来两枚戒指 (模糊匹配)",
+            "戒指2枚，项链3条，手链5条 (复杂场景)",
+            "把珍珠项链改成10条 (修改数量)",
+            "去掉红宝石手链 (删除商品)",
+            "按上个订单再来一单 (一键补货)"
           ]
         }
       ]);
@@ -95,6 +156,55 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   }, [chatHistory.length]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showChatPopup, setShowChatPopup] = useState(false);
+  const handleRestockSelect = (type: 'hot' | 'offer' | 'frequent') => {
+    // Add user message to chat for simulation
+    const userMsg = type === 'hot' ? '看看本周爆款' : 
+                  type === 'offer' ? '有哪些限时特惠？' : '查看我的常购清单';
+                  
+    const newUserMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: userMsg,
+      type: 'text',
+      timestamp: new Date(),
+      isRead: true
+    };
+    setChatHistory(prev => [...prev, newUserMsg]);
+
+    // Simulate AI response with embedded recommendation
+    setIsThinking(true);
+    setTimeout(() => {
+      setIsThinking(false);
+      
+      let products: Product[] = [];
+      let title = '';
+      
+      if (type === 'hot') {
+        title = '本周爆款';
+        products = MOCK_PRODUCTS.slice(0, 8);
+      } else if (type === 'offer') {
+        title = '限时特惠';
+        products = MOCK_PRODUCTS.filter(p => p.originalPrice);
+      } else if (type === 'frequent') {
+        title = '常购清单';
+        products = MOCK_PRODUCTS.slice(8, 16);
+      }
+
+      const aiMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'ai',
+        content: `为您找到以下${title}商品：`,
+        type: 'recommendation',
+        timestamp: new Date(),
+        isRead: true,
+        recommendations: {
+          title,
+          products
+        }
+      };
+      setChatHistory(prev => [...prev, aiMsg]);
+    }, 800);
+  };
 
   // Mark messages as read when chat popup is opened
   useEffect(() => {
@@ -123,8 +233,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatHistory, isProcessing, isThinking]);
-  const [ambiguousMatches, setAmbiguousMatches] = useState<Product[] | null>(null);
-  const [pendingAction, setPendingAction] = useState<{qty: number, isRemove: boolean, isModify: boolean} | null>(null);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -192,6 +300,13 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       inputRef.current.focus();
     }
   }, [inputType]);
+
+  // Focus input when chat popup collapses
+  useEffect(() => {
+    if (!showChatPopup && inputType === 'text' && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [showChatPopup, inputType]);
 
   useEffect(() => {
     if (speechError) {
@@ -383,6 +498,34 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         }
       }
 
+      // Handle "Restock from previous order"
+      if (text.includes('按上个订单') || text.includes('再来一单')) {
+        const previousOrderProducts = MOCK_PRODUCTS.slice(0, 3); // Simulate previous order with first 3 products
+        previousOrderProducts.forEach(p => addToCart(p, 1));
+        
+        const newUserMsg: ChatMessage = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: text,
+          type: isVoice ? 'voice' : 'text',
+          timestamp: new Date(),
+          isRead: true
+        };
+
+        const newAiMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'ai',
+          content: `已为您按上个订单自动补货：${previousOrderProducts.map(p => p.name).join('、')}。`,
+          type: 'text',
+          timestamp: new Date(),
+          isRead: showChatPopup
+        };
+
+        setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+        finishProcessing();
+        return;
+      }
+
       const isRemove = /去掉|不要|删除|取消|减/.test(text);
       const isModify = /改成|修改为|变成/.test(text);
       
@@ -416,8 +559,26 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       }
 
       if (foundAmbiguous) {
-        setAmbiguousMatches(ambiguousGroup);
-        setPendingAction({ qty, isRemove, isModify });
+        const bestMatch = ambiguousGroup[0];
+        const alternatives = ambiguousGroup.slice(1);
+        let actionText = '';
+
+        if (isRemove) {
+          removeFromCart(bestMatch.id);
+          actionText = `已为您移除 ${bestMatch.name}`;
+        } else if (isModify) {
+          const item = cartItems.find(i => i.productId === bestMatch.id);
+          if (item) {
+            updateQuantity(bestMatch.id, qty - item.quantity);
+            actionText = `已将 ${bestMatch.name} 数量修改为 ${qty}`;
+          } else {
+            addToCart(bestMatch, qty, alternatives);
+            actionText = `已为您添加 ${qty}件 ${bestMatch.name}(含备选)`;
+          }
+        } else {
+          addToCart(bestMatch, qty, alternatives);
+          actionText = `已为您添加 ${qty}件 ${bestMatch.name}(含备选)`;
+        }
         
         const newUserMsg: ChatMessage = {
           id: Date.now().toString(),
@@ -431,7 +592,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         const newAiMsg: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: 'ai',
-          content: `找到多个包含该名称的商品，请选择您需要哪一个？`,
+          content: `${actionText}。找到多个包含该名称的商品，已为您选择第一个，您可以在购物车中点击“更多匹配”进行更换。`,
           type: 'text',
           timestamp: new Date(),
           isRead: showChatPopup
@@ -501,52 +662,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
       finishProcessing();
     }, 1000);
-  };
-
-  const handleAmbiguousSelection = (product: Product) => {
-    if (!pendingAction) return;
-    
-    const { qty, isRemove, isModify } = pendingAction;
-    let actionText = '';
-
-    if (isRemove) {
-      removeFromCart(product.id);
-      actionText = `已为您移除 ${product.name}`;
-    } else if (isModify) {
-      const item = cartItems.find(i => i.productId === product.id);
-      if (item) {
-        updateQuantity(product.id, qty - item.quantity);
-        actionText = `已将 ${product.name} 数量修改为 ${qty}`;
-      } else {
-        addToCart(product, qty);
-        actionText = `已为您添加 ${qty}件 ${product.name}`;
-      }
-    } else {
-      addToCart(product, qty);
-      actionText = `已为您添加 ${qty}件 ${product.name}`;
-    }
-
-    const newUserMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: `选择了: ${product.name}`,
-      type: 'text',
-      timestamp: new Date(),
-      isRead: true
-    };
-
-    const newAiMsg: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'ai',
-      content: actionText,
-      type: 'text',
-      timestamp: new Date(),
-      isRead: showChatPopup
-    };
-
-    setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
-    setAmbiguousMatches(null);
-    setPendingAction(null);
   };
 
   const handleSend = () => {
@@ -656,7 +771,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#f5f5f9] relative overflow-hidden">
+    <div ref={containerRef} className="flex flex-col h-full bg-[#f5f5f9] relative">
       {/* AI对话 Popup (Conversation History & Processing) - Moved to top level for better control */}
       <AnimatePresence>
         {showChatPopup && (
@@ -668,7 +783,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setShowChatPopup(false)}
-                className="absolute inset-0 bottom-[64px] z-40 bg-black/20"
+                className="absolute inset-0 bottom-[64px] z-[100] bg-black/20"
               />
             )}
             
@@ -680,7 +795,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
               }
               exit={{ opacity: 0, height: 0, y: 10 }}
               className={cn(
-                "bg-white shadow-[0_-15px_40px_rgba(0,0,0,0.12)] border-t border-blue-50 overflow-hidden z-50 flex flex-col absolute",
+                "bg-white shadow-[0_-15px_40px_rgba(0,0,0,0.12)] border-t border-blue-50 overflow-hidden z-[110] flex flex-col absolute",
                 isFullscreen ? "inset-0" : "left-0 right-0 max-h-[calc(100%-100px)]"
               )}
             >
@@ -724,6 +839,31 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 </div>
               </div>
 
+              {/* Restock Shortcuts */}
+              <div className="flex items-center gap-2 p-2 overflow-x-auto no-scrollbar bg-white border-b border-gray-50 shrink-0">
+                <button 
+                  onClick={() => handleRestockSelect('hot')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-100 text-orange-700 whitespace-nowrap shadow-sm hover:bg-orange-100 transition-all active:scale-95"
+                >
+                  <Zap size={14} className="text-orange-500" />
+                  <span className="text-[11px] font-bold">本周爆款</span>
+                </button>
+                <button 
+                  onClick={() => handleRestockSelect('offer')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-red-700 whitespace-nowrap shadow-sm hover:bg-red-100 transition-all active:scale-95"
+                >
+                  <Gift size={14} className="text-red-500" />
+                  <span className="text-[11px] font-bold">限时特惠</span>
+                </button>
+                <button 
+                  onClick={() => handleRestockSelect('frequent')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 whitespace-nowrap shadow-sm hover:bg-blue-100 transition-all active:scale-95"
+                >
+                  <RotateCcw size={14} className="text-blue-500" />
+                  <span className="text-[11px] font-bold">常购清单</span>
+                </button>
+              </div>
+
               {/* Messages */}
               <div className={cn(
                 "flex-1 overflow-y-auto p-3 space-y-4 bg-gray-50/30",
@@ -735,12 +875,35 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                     msg.role === 'user' ? "items-end" : "items-start"
                   )}>
                     <div className={cn(
-                      "px-3 py-2 rounded-2xl text-sm max-w-[85%] shadow-sm",
+                      "px-3 py-2 rounded-2xl text-sm max-w-[90%] shadow-sm",
                       msg.role === 'user' 
                         ? "bg-blue-500 text-white rounded-tr-none" 
                         : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
                     )}>
                       {msg.content}
+                      
+                      {msg.type === 'recommendation' && msg.recommendations && (
+                        <RecommendationList 
+                          products={msg.recommendations.products}
+                          onAddToCart={(p, e) => {
+                            addToCart(p, 1);
+                            
+                            // Animation logic
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const containerRect = containerRef.current?.getBoundingClientRect();
+                            const newItem = {
+                              id: Date.now(),
+                              x: rect.left - (containerRect?.left || 0),
+                              y: rect.top - (containerRect?.top || 0),
+                              image: p.image
+                            };
+                            setFlyingItems(prev => [...prev, newItem]);
+                            setTimeout(() => {
+                              setFlyingItems(prev => prev.filter(item => item.id !== newItem.id));
+                            }, 800);
+                          }}
+                        />
+                      )}
                       
                       {msg.suggestions && (
                         <div className="mt-3 flex flex-col gap-2">
@@ -975,7 +1138,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
                 {/* Image & More Matches */}
                 <div className="flex flex-col items-center gap-2 shrink-0">
-                  <img src={item.product.image} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" />
+                  <img src={item.product.image} alt={item.product.name} referrerPolicy="no-referrer" className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" />
                   {item.alternatives && item.alternatives.length > 0 && (
                     <button 
                       onClick={() => setSelectedItemForMatches(item)}
@@ -1057,6 +1220,31 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           </div>
         )}
       </div>
+
+      {/* Bottom Cart Summary & Checkout */}
+      {cartItems.length > 0 && (
+        <div className="bg-white border-t border-gray-100 px-4 py-2 flex items-center justify-between shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.03)] z-40 relative">
+          <div className="flex items-center gap-4">
+            <div className="flex items-baseline gap-1">
+              <span className="text-xs text-gray-400">已选</span>
+              <span className="text-sm font-bold text-gray-800">{cartItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
+              <span className="text-xs text-gray-400">件</span>
+            </div>
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-xs text-gray-400">合计</span>
+              <span className="text-[#ff5000] text-xs font-bold ml-1">¥</span>
+              <span className="text-[#ff5000] text-lg font-black">{totalAmount.toFixed(2)}</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => setShowCheckout(true)}
+            className="h-9 px-6 bg-[#ff5000] text-white rounded-full font-bold text-sm shadow-md shadow-orange-100 active:scale-[0.98] transition-all flex items-center justify-center gap-1"
+          >
+            <span>立即下单</span>
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Bottom Input Area */}
       <div className="px-4 py-3 bg-white relative shrink-0 border-t border-gray-100 z-50">
@@ -1222,60 +1410,33 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         )}
       </AnimatePresence>
 
-      {/* Ambiguous Match Modal */}
+      {/* Flying Items Animation */}
       <AnimatePresence>
-        {ambiguousMatches && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => {
-                setAmbiguousMatches(null);
-                setPendingAction(null);
-              }}
-              className="absolute inset-0 bg-black/40 z-50"
+        {flyingItems.map(item => (
+          <motion.div
+            key={item.id}
+            initial={{ x: item.x, y: item.y, scale: 1, opacity: 1 }}
+            animate={{ 
+              x: (containerRef.current?.clientWidth || 0) / 2 - 24, 
+              y: (containerRef.current?.clientHeight || 0) + 40, 
+              scale: 0.1, 
+              opacity: 0 
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+            className="absolute w-12 h-12 z-[999] pointer-events-none"
+          >
+            <img 
+              src={item.image} 
+              alt="" 
+              className="w-full h-full object-cover rounded-lg shadow-lg border-2 border-white"
+              referrerPolicy="no-referrer"
             />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="absolute top-1/2 left-4 right-4 -translate-y-1/2 bg-white rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col max-h-[70vh]"
-            >
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-                <h3 className="font-bold text-gray-800">请选择具体商品</h3>
-                <button 
-                  onClick={() => {
-                    setAmbiguousMatches(null);
-                    setPendingAction(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="overflow-y-auto p-2">
-                {ambiguousMatches.map(product => (
-                  <button
-                    key={product.id}
-                    onClick={() => handleAmbiguousSelection(product)}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 rounded-xl transition-colors text-left border-b border-gray-50 last:border-0"
-                  >
-                    <img src={product.image} alt={product.name} className="w-12 h-12 rounded-lg object-cover bg-gray-100 shrink-0" referrerPolicy="no-referrer" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-800 truncate">{product.name}</div>
-                      <div className="text-sm text-[#ff5000] font-bold mt-0.5">¥{product.price.toFixed(2)}</div>
-                    </div>
-                    <ChevronRight size={18} className="text-gray-300 shrink-0" />
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </>
-        )}
+          </motion.div>
+        ))}
       </AnimatePresence>
 
-        {/* Matches Selection Modal */}
+      {/* Matches Selection Modal */}
       <AnimatePresence>
         {selectedItemForMatches && (
           <>
@@ -1314,7 +1475,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                       }}
                       className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#ff5000] hover:bg-orange-50/30 transition-all text-left"
                     >
-                      <img src={alt.image} className="w-12 h-12 rounded-lg object-cover bg-gray-50" />
+                      <img src={alt.image} referrerPolicy="no-referrer" className="w-12 h-12 rounded-lg object-cover bg-gray-50" />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-900 text-sm truncate">{alt.name}</div>
                         <div className="text-[#ff5000] font-bold text-sm mt-0.5">¥{alt.price}</div>
@@ -1330,6 +1491,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       </AnimatePresence>
 
       {/* Product Swap Modal */}
+
         <AnimatePresence>
           {swappingItem && (
             <>
@@ -1350,7 +1512,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 <div className="flex justify-between items-start mb-6 shrink-0">
                   <div className="flex gap-4">
                     <div className="w-20 h-20 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
-                      <img src={swappingItem.product.image} className="w-full h-full object-cover" />
+                      <img src={swappingItem.product.image} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex flex-col justify-center">
                       <h3 className="font-bold text-lg text-gray-900 mb-1">{swappingItem.product.name}</h3>
@@ -1444,6 +1606,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
               </motion.div>
             </>
           )}
+
+          {/* Recommendation Popup removed */}
         </AnimatePresence>
     </div>
   );

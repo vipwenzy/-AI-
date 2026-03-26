@@ -175,7 +175,7 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
 
                   {/* Image & More Matches */}
                   <div className="flex flex-col items-center gap-2 shrink-0">
-                    <img src={item.product.image} alt={item.product.name} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" />
+                    <img src={item.product.image} alt={item.product.name} referrerPolicy="no-referrer" className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" />
                     {item.alternatives && item.alternatives.length > 0 && (
                       <button 
                         onClick={() => setSelectedItemForMatches(item)}
@@ -341,7 +341,7 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
                       }}
                       className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#ff5000] hover:bg-orange-50/30 transition-all text-left"
                     >
-                      <img src={alt.image} className="w-12 h-12 rounded-lg object-cover bg-gray-50" />
+                      <img src={alt.image} referrerPolicy="no-referrer" className="w-12 h-12 rounded-lg object-cover bg-gray-50" />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-900 text-sm truncate">{alt.name}</div>
                         <div className="text-[#ff5000] font-bold text-sm mt-0.5">¥{alt.price}</div>
@@ -377,7 +377,7 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
               <div className="flex justify-between items-start mb-6 shrink-0">
                 <div className="flex gap-4">
                   <div className="w-20 h-20 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
-                    <img src={selectedItemForSpec.product.image} className="w-full h-full object-cover" />
+                    <img src={selectedItemForSpec.product.image} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                   </div>
                   <div className="flex flex-col justify-center">
                     <h3 className="font-bold text-lg text-gray-900 mb-1">{selectedItemForSpec.product.name}</h3>

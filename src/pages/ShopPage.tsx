@@ -110,7 +110,7 @@ export default function ShopPage() {
             return (
               <div key={product.id} className="flex gap-3" onClick={() => setSelectedProduct(product)}>
                 <div className="w-24 h-24 bg-gray-50 rounded-lg overflow-hidden shrink-0 relative border border-gray-100">
-                  <img src={product.image} className="w-full h-full object-cover mix-blend-multiply" />
+                  <img src={product.image} referrerPolicy="no-referrer" className="w-full h-full object-cover mix-blend-multiply" />
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                   <div>
@@ -178,7 +178,7 @@ export default function ShopPage() {
               className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl z-50 flex flex-col max-h-[85vh] overflow-hidden shadow-2xl"
             >
               <div className="relative w-full aspect-square bg-gray-50 shrink-0">
-                <img src={selectedProduct.image} className="w-full h-full object-cover mix-blend-multiply" />
+                <img src={selectedProduct.image} referrerPolicy="no-referrer" className="w-full h-full object-cover mix-blend-multiply" />
                 <button 
                   onClick={() => setSelectedProduct(null)}
                   className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/20 text-white flex items-center justify-center backdrop-blur-md"
