@@ -234,6 +234,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     }
   }, [chatHistory, isProcessing, isThinking]);
   const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const sortedCartItems = [...cartItems];
@@ -265,11 +266,17 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         recognitionRef.current.lang = 'zh-CN';
 
         recognitionRef.current.onresult = (event: any) => {
-          let currentTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            currentTranscript += event.results[i][0].transcript;
+          let fullTranscript = '';
+          for (let i = 0; i < event.results.length; ++i) {
+            fullTranscript += event.results[i][0].transcript;
           }
-          setTranscript(currentTranscript);
+          setTranscript(fullTranscript);
+          transcriptRef.current = fullTranscript;
+          
+          // Auto open AI dialog when voice input is detected
+          if (fullTranscript.trim()) {
+            setShowChatPopup(true);
+          }
         };
 
         recognitionRef.current.onerror = (event: any) => {
@@ -350,6 +357,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     setSpeechError(null);
     setIsRecording(true);
     setTranscript('');
+    transcriptRef.current = '';
     setIsCancelZone(false);
     
     // Track touch start position
@@ -397,9 +405,13 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       return;
     }
 
-    if (transcript) {
-      processInput(transcript, true);
+    const finalTranscript = transcriptRef.current || transcript;
+    if (finalTranscript) {
+      setInputValue(finalTranscript);
+      setInputType('text');
+      processInput(finalTranscript, true);
       setTranscript('');
+      transcriptRef.current = '';
     }
   };
 
@@ -441,6 +453,17 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
     setIsThinking(true);
     setShowChatPopup(true);
 
+    // Add user message immediately
+    const newUserMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: text,
+      type: isVoice ? 'voice' : 'text',
+      timestamp: new Date(),
+      isRead: true
+    };
+    setChatHistory(prev => [...prev, newUserMsg]);
+
     // Simulate AI processing delay
     setTimeout(() => {
       setIsThinking(false);
@@ -474,15 +497,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         });
         
         if (actions.length > 0) {
-          const newUserMsg: ChatMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: text,
-            type: isVoice ? 'voice' : 'text',
-            timestamp: new Date(),
-            isRead: true
-          };
-
           const newAiMsg: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: 'ai',
@@ -492,7 +506,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             isRead: showChatPopup
           };
 
-          setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+          setChatHistory(prev => [...prev, newAiMsg]);
           finishProcessing();
           return;
         }
@@ -503,15 +517,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         const previousOrderProducts = MOCK_PRODUCTS.slice(0, 3); // Simulate previous order with first 3 products
         previousOrderProducts.forEach(p => addToCart(p, 1));
         
-        const newUserMsg: ChatMessage = {
-          id: Date.now().toString(),
-          role: 'user',
-          content: text,
-          type: isVoice ? 'voice' : 'text',
-          timestamp: new Date(),
-          isRead: true
-        };
-
         const newAiMsg: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: 'ai',
@@ -521,7 +526,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           isRead: showChatPopup
         };
 
-        setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+        setChatHistory(prev => [...prev, newAiMsg]);
         finishProcessing();
         return;
       }
@@ -580,15 +585,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           actionText = `已为您添加 ${qty}件 ${bestMatch.name}(含备选)`;
         }
         
-        const newUserMsg: ChatMessage = {
-          id: Date.now().toString(),
-          role: 'user',
-          content: text,
-          type: isVoice ? 'voice' : 'text',
-          timestamp: new Date(),
-          isRead: true
-        };
-
         const newAiMsg: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: 'ai',
@@ -598,7 +594,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           isRead: showChatPopup
         };
 
-        setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+        setChatHistory(prev => [...prev, newAiMsg]);
         finishProcessing();
         return;
       }
@@ -641,15 +637,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
       let aiResponse = actions.length > 0 ? actions.join('，') + '。' : '抱歉，我没有听清您需要的商品，请再说一遍。';
 
-      const newUserMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: text,
-        type: isVoice ? 'voice' : 'text',
-        timestamp: new Date(),
-        isRead: true
-      };
-
       const newAiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'ai',
@@ -659,7 +646,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         isRead: showChatPopup
       };
 
-      setChatHistory(prev => [...prev, newUserMsg, newAiMsg]);
+      setChatHistory(prev => [...prev, newAiMsg]);
       finishProcessing();
     }, 1000);
   };
@@ -1035,7 +1022,12 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       {/* Header */}
       <div className="h-14 bg-[#f5f5f9] border-b border-gray-200 flex items-center justify-between px-4 shrink-0 z-10">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-gray-800 text-lg">购物车</span>
+          <button 
+            onClick={onSwitchMode}
+            className="font-bold text-gray-800 text-lg hover:opacity-70 transition-opacity flex items-center gap-1"
+          >
+            购物车 <ChevronRight size={18} className="text-gray-400" />
+          </button>
         </div>
         <div className="flex items-center gap-4">
           <button className="text-sm text-gray-600 flex items-center gap-1">
@@ -1046,12 +1038,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             className="text-sm text-blue-600"
           >
             清空
-          </button>
-          <button 
-            onClick={onSwitchMode}
-            className="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-50 transition-colors ml-2"
-          >
-            高级模式
           </button>
         </div>
       </div>
@@ -1331,7 +1317,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-end bg-black/60 backdrop-blur-sm cursor-default pb-32"
+            className="absolute inset-0 z-[200] flex flex-col items-center justify-end bg-black/60 backdrop-blur-sm cursor-default pb-32"
           >
             <div className="flex flex-col items-center gap-6 w-full px-6">
               {/* Transcript / Listening State */}

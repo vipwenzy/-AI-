@@ -519,11 +519,43 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
   const [activeSessionId, setActiveSessionId] = useState<string>('1');
   const [showHistory, setShowHistory] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef('');
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        recognitionRef.current = new (SpeechRecognition as any)();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = 'zh-CN';
+
+        recognitionRef.current.onresult = (event: any) => {
+          let fullTranscript = '';
+          for (let i = 0; i < event.results.length; ++i) {
+            fullTranscript += event.results[i][0].transcript;
+          }
+          setTranscript(fullTranscript);
+          transcriptRef.current = fullTranscript;
+        };
+
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          setIsRecording(false);
+          setTranscript('');
+        };
+      } catch (err) {
+        console.error('Failed to initialize speech recognition:', err);
+      }
+    }
+  }, []);
   
   const { items: cartItems, addToCart, removeFromCart, updateQuantity, clearCart, totalItems } = useCart();
 
@@ -957,12 +989,36 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
     }, 1000);
   };
 
-  const handleVoiceInput = () => {
-    setIsRecording(true);
-    setTimeout(() => {
+  const startRecording = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (recognitionRef.current) {
+      setTranscript('');
+      transcriptRef.current = '';
+      setIsRecording(true);
+      try {
+        recognitionRef.current.start();
+      } catch (err) {
+        console.error('Error starting recognition:', err);
+      }
+    }
+  };
+
+  const stopRecording = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (recognitionRef.current && isRecording) {
+      recognitionRef.current.stop();
       setIsRecording(false);
-      handleSend("我要50箱可乐和20盒薯片");
-    }, 2000);
+      const finalTranscript = transcriptRef.current || transcript;
+      if (finalTranscript.trim()) {
+        handleSend(finalTranscript);
+      }
+      setTranscript('');
+      transcriptRef.current = '';
+    }
+  };
+
+  const handleVoiceInput = () => {
+    // This is now handled by startRecording/stopRecording on the button
   };
 
   const updateDraftItem = (msgId: string, itemIndex: number, newProduct: Product) => {
@@ -1319,7 +1375,7 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
               initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
               animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
               exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-              className="absolute inset-0 bg-white/60 z-60 flex flex-col items-center justify-center"
+              className="absolute inset-0 bg-white/60 z-[200] flex flex-col items-center justify-center"
             >
               <div className="relative">
                 <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
@@ -1329,8 +1385,14 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
                 </div>
               </div>
               
-              <h3 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">正在聆听...</h3>
-              <p className="text-gray-500 text-sm font-medium">AI 语音引擎已激活</p>
+              <div className="max-w-xs text-center px-4 mb-8">
+                <h3 className="text-xl font-bold text-gray-900 mb-3 tracking-tight leading-relaxed">
+                  {transcript || "正在聆听您的指令..."}
+                </h3>
+                <p className="text-gray-500 text-xs font-medium uppercase tracking-widest">
+                  {transcript ? "识别中" : "等待输入"}
+                </p>
+              </div>
               
               <div className="mt-12 flex gap-1.5 items-center h-12">
                 {[...Array(12)].map((_, i) => (
@@ -1397,10 +1459,17 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
             <Camera size={20} className="group-hover:text-blue-600 transition-colors" />
           </button>
           <button 
-            onClick={handleVoiceInput}
-            className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-100 hover:text-blue-600 hover:border-blue-200 active:scale-95 transition-all group"
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            onTouchStart={startRecording}
+            onTouchEnd={stopRecording}
+            onContextMenu={(e) => e.preventDefault()}
+            className={cn(
+              "w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-100 hover:text-blue-600 hover:border-blue-200 active:scale-95 transition-all group",
+              isRecording && "bg-blue-50 border-blue-200 text-blue-600"
+            )}
           >
-            <Mic size={20} className="group-hover:text-blue-600 transition-colors" />
+            <Mic size={20} className={cn("transition-colors", isRecording ? "text-blue-600" : "group-hover:text-blue-600")} />
           </button>
           
           <div className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 flex items-center border border-gray-200 focus-within:border-blue-500 focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(59,130,246,0.1)] transition-all">
