@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin, Bot } from 'lucide-react';
+import { Mic, Send, Trash2, Plus, Minus, Sparkles, ChevronUp, ChevronDown, X, ShoppingCart, Keyboard, Check, Search, ChevronLeft, Circle, CheckCircle2, ChevronRight, History, Pin } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { MOCK_PRODUCTS, Product } from '../data/mockDb';
 import { cn } from '../lib/utils';
@@ -26,6 +26,15 @@ export interface ChatMessage {
   timestamp: Date;
   suggestions?: string[];
 }
+
+const CrayfishAIIcon = ({ size = 20, className = "" }: { size?: number, className?: string }) => (
+  <div className={cn("relative flex items-center justify-center", className)} style={{ width: size, height: size }}>
+    <span style={{ fontSize: size * 0.9 }}>🦞</span>
+    <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-[8px] font-bold px-0.5 rounded leading-none flex items-center justify-center border border-white shadow-sm" style={{ transform: 'scale(0.8)' }}>
+      AI
+    </div>
+  </div>
+);
 
 export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const { items: cartItems, updateQuantity, removeFromCart, addToCart, updateUnit, swapProduct, totalAmount } = useCart();
@@ -53,7 +62,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         {
           id: 'welcome',
           role: 'ai',
-          content: '亲爱的小主，我是您的 AI 订货助手小悦 ✨ 很高兴为您服务！您可以直接告诉我您想买什么，或者对购物车里的宝贝进行修改。比如您可以试试这样说：👇',
+          content: '快对小P说您想买的商品吧。',
           type: 'text',
           timestamp: new Date(),
           suggestions: [
@@ -863,9 +872,9 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                   <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                      <Bot size={18} className="text-blue-500" />
+                      <CrayfishAIIcon size={22} />
                     </div>
-                    <span className="text-sm font-bold text-gray-800">AI 订货助手</span>
+                    <span className="text-sm font-bold text-gray-800">小P 订货助手</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
@@ -950,7 +959,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                             className="w-1.5 h-1.5 bg-blue-400 rounded-full" 
                           />
                         </div>
-                        <span className="text-xs text-gray-500 font-medium">AI 正在思考中...</span>
+                        <span className="text-xs text-gray-500 font-medium">小P 正在思考中...</span>
                       </div>
                     </div>
                   )}
@@ -1026,7 +1035,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 animate={showChatPopup ? { rotate: [0, -10, 10, 0] } : {}}
                 transition={{ duration: 0.5 }}
               >
-                <Bot size={20} />
+                <CrayfishAIIcon size={24} />
               </motion.div>
               {chatHistory.length > 0 && !showChatPopup && (
                 <div className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full border border-white"></div>
