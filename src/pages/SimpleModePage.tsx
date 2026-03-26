@@ -801,12 +801,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                         className="text-[10px] text-[#ff5000] border border-[#ff5000] px-2 py-0.5 rounded flex items-center gap-0.5 bg-orange-50/50 relative shrink-0"
                       >
                         <span>选规格</span>
-                        {/* Multiple matches badge */}
-                        {(item.alternatives?.length || 0) > 0 && (
-                          <div className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white">
-                            {item.alternatives?.length}
-                          </div>
-                        )}
                       </button>
                     </div>
 
