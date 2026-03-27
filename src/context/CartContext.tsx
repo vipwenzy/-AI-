@@ -6,6 +6,7 @@ export interface CartItem {
   quantity: number;
   product: Product;
   alternatives?: Product[];
+  selected?: boolean;
 }
 
 interface CartContextType {
@@ -15,9 +16,13 @@ interface CartContextType {
   updateQuantity: (productId: string, delta: number) => void;
   updateUnit: (productId: string, newUnit: string) => void;
   swapProduct: (oldProductId: string, newProduct: Product) => void;
+  toggleSelection: (productId: string) => void;
+  selectAll: (selected: boolean) => void;
   clearCart: () => void;
   totalAmount: number;
   totalItems: number;
+  selectedItemsCount: number;
+  selectedAmount: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -31,11 +36,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (existing) {
         return prev.map(item => 
           item.productId === product.id 
-            ? { ...item, quantity: item.quantity + quantity, alternatives: alternatives || item.alternatives }
+            ? { ...item, quantity: item.quantity + quantity, alternatives: alternatives || item.alternatives, selected: true }
             : item
         );
       }
-      return [...prev, { productId: product.id, quantity, product, alternatives }];
+      return [...prev, { productId: product.id, quantity, product, alternatives, selected: true }];
     });
   };
 
@@ -88,15 +93,41 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const toggleSelection = (productId: string) => {
+    setItems(prev => prev.map(item => 
+      item.productId === productId ? { ...item, selected: !item.selected } : item
+    ));
+  };
+
+  const selectAll = (selected: boolean) => {
+    setItems(prev => prev.map(item => ({ ...item, selected })));
+  };
+
   const clearCart = () => {
     setItems([]);
   };
 
   const totalAmount = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  const selectedItemsCount = items.filter(i => i.selected).reduce((sum, item) => sum + item.quantity, 0);
+  const selectedAmount = items.filter(i => i.selected).reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
 
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, updateUnit, swapProduct, clearCart, totalAmount, totalItems }}>
+    <CartContext.Provider value={{ 
+      items, 
+      addToCart, 
+      removeFromCart, 
+      updateQuantity, 
+      updateUnit, 
+      swapProduct, 
+      toggleSelection,
+      selectAll,
+      clearCart, 
+      totalAmount, 
+      totalItems,
+      selectedItemsCount,
+      selectedAmount
+    }}>
       {children}
     </CartContext.Provider>
   );

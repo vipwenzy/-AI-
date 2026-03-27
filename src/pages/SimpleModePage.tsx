@@ -13,7 +13,6 @@ const SUGGESTIONS = [
   "来两枚戒指 (模糊匹配)",
   "戒指2枚，项链3条，手链5条 (复杂场景)",
   "把珍珠项链改成10条 (修改数量)",
-  "去掉红宝石手链 (删除商品)",
   "按上个订单再来一单 (一键补货)"
 ];
 
@@ -112,7 +111,19 @@ const RecommendationList = ({
 
 export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { items: cartItems, updateQuantity, removeFromCart, addToCart, updateUnit, swapProduct, totalAmount } = useCart();
+  const { 
+    items: cartItems, 
+    updateQuantity, 
+    removeFromCart, 
+    addToCart, 
+    updateUnit, 
+    swapProduct, 
+    toggleSelection,
+    selectAll,
+    totalAmount,
+    selectedItemsCount,
+    selectedAmount
+  } = useCart();
   const [swappingItemId, setSwappingItemId] = useState<string | null>(null);
   const swappingItem = swappingItemId ? cartItems.find(i => i.productId === swappingItemId) : null;
   const [selectedItemForMatches, setSelectedItemForMatches] = useState<any>(null);
@@ -131,6 +142,9 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [flyingItems, setFlyingItems] = useState<{ id: number, x: number, y: number, image: string }[]>([]);
   const unreadCount = chatHistory.filter(msg => msg.role === 'ai' && !msg.isRead).length;
+  const [showNewChatConfirm, setShowNewChatConfirm] = useState(false);
+
+  const allSelected = cartItems.length > 0 && cartItems.every(i => i.selected);
 
   // Initialize chat history with welcome message
   useEffect(() => {
@@ -147,7 +161,6 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
             "来两枚戒指 (模糊匹配)",
             "戒指2枚，项链3条，手链5条 (复杂场景)",
             "把珍珠项链改成10条 (修改数量)",
-            "去掉红宝石手链 (删除商品)",
             "按上个订单再来一单 (一键补货)"
           ]
         }
@@ -799,10 +812,14 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <button 
-                    onClick={() => setChatHistory([])}
+                    onClick={() => {
+                      if (chatHistory.length > 0) {
+                        setShowNewChatConfirm(true);
+                      }
+                    }}
                     className="text-[10px] text-blue-600 font-medium px-2 py-1 rounded-full bg-blue-50 hover:bg-blue-100 transition-colors"
                   >
-                    新建对话
+                    新对话
                   </button>
                   <button 
                     onClick={() => setIsFullscreen(!isFullscreen)}
@@ -1113,13 +1130,25 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
                   index === cartItems.length - 1 ? "border-0 pb-2" : ""
                 )}
               >
-                {/* Delete Button - Subtle white circle with cross */}
+                {/* Selection Checkbox */}
+                <button 
+                  onClick={() => toggleSelection(item.productId)}
+                  className="shrink-0"
+                >
+                  {item.selected ? (
+                    <CheckCircle2 size={20} className="text-[#ff5000] fill-[#ff5000] text-white" />
+                  ) : (
+                    <Circle size={20} className="text-gray-300" />
+                  )}
+                </button>
+
+                {/* Delete Button - Simple cross */}
                 <button 
                   onClick={() => removeFromCart(item.productId)}
-                  className="absolute top-2 right-0 w-6 h-6 bg-white border border-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 shadow-sm z-10 transition-all active:scale-90"
+                  className="absolute top-2 right-0 p-1 text-gray-300 hover:text-gray-500 z-10 transition-all active:scale-90"
                   title="删除商品"
                 >
-                  <X size={14} />
+                  <X size={16} />
                 </button>
 
                 {/* Image & More Matches */}
@@ -1210,23 +1239,49 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       {/* Bottom Cart Summary & Checkout */}
       {cartItems.length > 0 && (
         <div className="bg-white border-t border-gray-100 px-4 py-2 flex items-center justify-between shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.03)] z-40 relative">
-          <div className="flex items-center gap-4">
-            <div className="flex items-baseline gap-1">
-              <span className="text-xs text-gray-400">已选</span>
-              <span className="text-sm font-bold text-gray-800">{cartItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
-              <span className="text-xs text-gray-400">件</span>
-            </div>
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-xs text-gray-400">合计</span>
-              <span className="text-[#ff5000] text-xs font-bold ml-1">¥</span>
-              <span className="text-[#ff5000] text-lg font-black">{totalAmount.toFixed(2)}</span>
+          <div className="flex items-center gap-3">
+            {/* Select All */}
+            <button 
+              onClick={() => selectAll(!allSelected)}
+              className="flex items-center gap-1.5"
+            >
+              {allSelected ? (
+                <CheckCircle2 size={18} className="text-[#ff5000] fill-[#ff5000] text-white" />
+              ) : (
+                <Circle size={18} className="text-gray-300" />
+              )}
+              <span className="text-[10px] text-gray-500">全选</span>
+            </button>
+
+            <div className="flex flex-col justify-center h-9">
+              <div className="flex items-baseline gap-0.5 leading-none">
+                <span className="text-[10px] text-gray-400">合计</span>
+                <span className="text-[#ff5000] text-[10px] font-bold ml-0.5">¥</span>
+                <span className="text-[#ff5000] text-base font-black">{selectedAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex items-baseline gap-1 leading-none mt-0.5">
+                <span className="text-[10px] text-gray-400">已选</span>
+                <span className="text-xs font-bold text-gray-800">{selectedItemsCount}</span>
+                <span className="text-[10px] text-gray-400">件</span>
+              </div>
             </div>
           </div>
           <button 
-            onClick={() => setShowCheckout(true)}
-            className="h-9 px-6 bg-[#ff5000] text-white rounded-full font-bold text-sm shadow-md shadow-orange-100 active:scale-[0.98] transition-all flex items-center justify-center gap-1"
+            onClick={() => {
+              if (selectedItemsCount === 0) {
+                alert('请先选择商品');
+                return;
+              }
+              setShowCheckout(true);
+            }}
+            className={cn(
+              "h-9 px-5 rounded-full font-bold text-sm shadow-md transition-all flex items-center justify-center gap-1",
+              selectedItemsCount > 0 
+                ? "bg-[#ff5000] text-white shadow-orange-100 active:scale-[0.98]" 
+                : "bg-gray-300 text-white shadow-none cursor-not-allowed"
+            )}
           >
-            <span>立即下单</span>
+            <span>下单</span>
             <ChevronRight size={14} />
           </button>
         </div>
@@ -1309,6 +1364,45 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
           </button>
         </div>
       </div>
+
+      {/* New Chat Confirmation Modal */}
+      <AnimatePresence>
+        {showNewChatConfirm && (
+          <div className="absolute inset-0 z-[300] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 shadow-2xl w-full max-w-[280px] text-center"
+            >
+              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Bot size={24} className="text-blue-600" />
+              </div>
+              <h3 className="font-bold text-gray-900 text-lg mb-2">开启新对话？</h3>
+              <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                确定要开启新对话吗？这将清空当前对话记录且不保存历史记录。
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => setShowNewChatConfirm(false)}
+                  className="py-3 rounded-2xl bg-gray-50 text-gray-600 font-bold text-sm hover:bg-gray-100 transition-colors"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => {
+                    setChatHistory([]);
+                    setShowNewChatConfirm(false);
+                  }}
+                  className="py-3 rounded-2xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+                >
+                  确定
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Recording Overlay */}
       <AnimatePresence>

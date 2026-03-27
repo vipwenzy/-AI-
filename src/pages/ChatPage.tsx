@@ -524,6 +524,7 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showNewChatConfirm, setShowNewChatConfirm] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef('');
@@ -614,6 +615,15 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
   };
 
   const createNewChat = () => {
+    if (sessions.length > 1 || (sessions[0]?.messages.length > 1)) {
+      setShowNewChatConfirm(true);
+      return;
+    }
+    
+    startNewChat();
+  };
+
+  const startNewChat = () => {
     const newSession: ChatSession = {
       id: Date.now().toString(),
       title: '新对话',
@@ -629,9 +639,10 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
         }
       }]
     };
-    setSessions(prev => [newSession, ...prev]);
+    setSessions([newSession]); // Clear all other sessions as per "not saving history"
     setActiveSessionId(newSession.id);
     setShowHistory(false);
+    setShowNewChatConfirm(false);
   };
 
   const handleSend = async (text: string) => {
@@ -1103,7 +1114,7 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
               <button 
                 onClick={createNewChat} 
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                title="新建对话"
+                title="新对话"
               >
                 <PlusCircle size={16} />
               </button>
@@ -1136,7 +1147,7 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
               <button 
                 onClick={createNewChat} 
                 className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
-                title="新建对话"
+                title="新对话"
               >
                 <PlusCircle size={14} />
                 新对话
@@ -1408,6 +1419,42 @@ export default function ChatPage({ isEmbedded, onCollapse, onNavigate, onSwitchM
           )}
         </AnimatePresence>
       </div>
+
+      {/* New Chat Confirmation Modal */}
+      <AnimatePresence>
+        {showNewChatConfirm && (
+          <div className="absolute inset-0 z-[300] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 shadow-2xl w-full max-w-[280px] text-center"
+            >
+              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Box size={24} className="text-blue-600" />
+              </div>
+              <h3 className="font-bold text-gray-900 text-lg mb-2">开启新对话？</h3>
+              <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                确定要开启新对话吗？这将清空当前对话记录且不保存历史记录。
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => setShowNewChatConfirm(false)}
+                  className="py-3 rounded-2xl bg-gray-50 text-gray-600 font-bold text-sm hover:bg-gray-100 transition-colors"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={startNewChat}
+                  className="py-3 rounded-2xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+                >
+                  确定
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Cart Modal - Full Screen */}
         <AnimatePresence>

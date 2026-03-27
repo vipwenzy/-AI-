@@ -1,39 +1,31 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, Sparkles, ChevronDown, X, Info, Check, Search, ChevronUp, ChevronRight } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, Sparkles, ChevronDown, X, Info, Check, Search, ChevronUp, ChevronRight, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CartPage({ onClose }: { onClose?: () => void }) {
-  const { items: cartItems, addToCart, removeFromCart, updateQuantity, updateUnit, swapProduct, clearCart, totalAmount, totalItems } = useCart();
+  const { 
+    items: cartItems, 
+    addToCart, 
+    removeFromCart, 
+    updateQuantity, 
+    updateUnit, 
+    swapProduct, 
+    toggleSelection,
+    selectAll,
+    clearCart, 
+    totalAmount, 
+    totalItems,
+    selectedItemsCount,
+    selectedAmount
+  } = useCart();
   const [selectedItemForSpec, setSelectedItemForSpec] = useState<any>(null);
   const [selectedItemForMatches, setSelectedItemForMatches] = useState<any>(null);
-  const [unselectedIds, setUnselectedIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'time' | 'price' | 'name'>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const toggleSelection = (productId: string) => {
-    const newSet = new Set(unselectedIds);
-    if (newSet.has(productId)) {
-      newSet.delete(productId);
-    } else {
-      newSet.add(productId);
-    }
-    setUnselectedIds(newSet);
-  };
-
-  const toggleAll = () => {
-    if (unselectedIds.size > 0) {
-      setUnselectedIds(new Set());
-    } else {
-      setUnselectedIds(new Set(cartItems.map(i => i.productId)));
-    }
-  };
-
-  const isAllSelected = cartItems.length > 0 && unselectedIds.size === 0;
-  const selectedCartItems = cartItems.filter(i => !unselectedIds.has(i.productId));
-  const selectedTotalAmount = selectedCartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const selectedTotalQuantity = selectedCartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const isAllSelected = cartItems.length > 0 && cartItems.every(i => i.selected);
 
   const sortedCartItems = [...cartItems].sort((a, b) => {
     let comparison = 0;
@@ -151,26 +143,25 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
                     index === cartItems.length - 1 ? "border-0 pb-2" : ""
                   )}
                 >
-                  {/* Delete Button - Subtle white circle with cross */}
+                  {/* Delete Button - Simple cross */}
                   <button 
                     onClick={() => removeFromCart(item.productId)}
-                    className="absolute top-2 right-0 w-6 h-6 bg-white border border-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 shadow-sm z-10 transition-all active:scale-90"
+                    className="absolute top-2 right-0 p-1 text-gray-300 hover:text-gray-500 z-10 transition-all active:scale-90"
                     title="删除商品"
                   >
-                    <X size={14} />
+                    <X size={16} />
                   </button>
 
                   {/* Checkbox */}
                   <button 
                     onClick={() => toggleSelection(item.productId)}
-                    className={cn(
-                      "w-5 h-5 rounded-full flex items-center justify-center shrink-0 border",
-                      !unselectedIds.has(item.productId) 
-                        ? "bg-[#ff5000] border-[#ff5000] text-white" 
-                        : "border-gray-300 bg-white"
-                    )}
+                    className="shrink-0"
                   >
-                    {!unselectedIds.has(item.productId) && <Check size={14} strokeWidth={3} />}
+                    {item.selected ? (
+                      <CheckCircle2 size={20} className="text-[#ff5000] fill-[#ff5000] text-white" />
+                    ) : (
+                      <Circle size={20} className="text-gray-300" />
+                    )}
                   </button>
 
                   {/* Image & More Matches */}
@@ -262,39 +253,52 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
           {/* Bottom Bar */}
           <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-0 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
             <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-100">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button 
-                  onClick={toggleAll}
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center shrink-0 border",
-                    isAllSelected 
-                      ? "bg-[#ff5000] border-[#ff5000] text-white" 
-                      : "border-gray-300 bg-white"
-                  )}
+                  onClick={() => selectAll(!isAllSelected)}
+                  className="flex items-center gap-1.5"
                 >
-                  {isAllSelected && <Check size={14} strokeWidth={3} />}
+                  {isAllSelected ? (
+                    <CheckCircle2 size={18} className="text-[#ff5000] fill-[#ff5000] text-white" />
+                  ) : (
+                    <Circle size={18} className="text-gray-300" />
+                  )}
+                  <span className="text-[10px] text-gray-500">全选</span>
                 </button>
-                <span className="text-sm text-gray-700 font-medium">已选({selectedCartItems.length})</span>
+                
+                <div className="flex flex-col justify-center h-9">
+                  <div className="flex items-baseline gap-0.5 leading-none">
+                    <span className="text-[10px] text-gray-400">合计</span>
+                    <span className="text-[#ff5000] text-[10px] font-bold ml-0.5">¥</span>
+                    <span className="text-[#ff5000] text-base font-black">{selectedAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-baseline gap-1 leading-none mt-0.5">
+                    <span className="text-[10px] text-gray-400">已选</span>
+                    <span className="text-xs font-bold text-gray-800">{selectedItemsCount}</span>
+                    <span className="text-[10px] text-gray-400">件</span>
+                  </div>
+                </div>
               </div>
               
               <div className="flex items-center gap-3">
-                <div className="flex flex-col items-end">
-                  <div className="text-sm">
-                    总额: <span className="font-bold text-lg text-[#ff5000]">{selectedTotalAmount.toFixed(2)}</span>
-                  </div>
-                </div>
                 <button 
                   onClick={() => {
-                    if (selectedCartItems.length === 0) {
+                    if (selectedItemsCount === 0) {
                       alert('请先选择商品');
                       return;
                     }
                     alert('订单已提交！');
                     clearCart();
                   }}
-                  className="bg-[#ff5000] text-white px-8 py-2 rounded-full font-bold text-base hover:bg-[#e64800] active:bg-[#cc4000] shadow-md"
+                  className={cn(
+                    "h-9 px-6 rounded-full font-bold text-sm shadow-md transition-all flex items-center justify-center gap-1",
+                    selectedItemsCount > 0 
+                      ? "bg-[#ff5000] text-white hover:bg-[#e64800] active:bg-[#cc4000]" 
+                      : "bg-gray-300 text-white cursor-not-allowed"
+                  )}
                 >
-                  下单
+                  <span>下单</span>
+                  <ChevronRight size={14} />
                 </button>
               </div>
             </div>
