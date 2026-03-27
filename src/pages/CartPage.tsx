@@ -45,11 +45,8 @@ export default function CartPage({ onClose }: { onClose?: () => void }) {
               <X size={24} />
             </button>
           )}
-          <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-6 text-gray-300 shadow-sm">
-            <ShoppingBag size={48} />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">购物车还是空的</h2>
-          <p className="text-gray-500 mb-8">快去店铺挑选心仪的商品吧</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">购物车还是空的</h2>
+          <p className="text-gray-500 text-lg font-medium mb-8">快去店铺挑选心仪的商品吧 ✨</p>
           <button 
             onClick={onClose}
             className="px-8 py-3 bg-[#ff5000] text-white rounded-xl font-medium shadow-lg shadow-orange-200 active:scale-95 transition-transform"

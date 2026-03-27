@@ -1110,11 +1110,8 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
         {cartItems.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center px-6 text-center bg-gray-50/50">
-            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-sm border border-gray-100">
-              <ShoppingCart size={48} className="text-gray-200" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-400 mb-2">购物车还是空的</h3>
-            <p className="text-gray-300 text-xs">快对小P说出您想买的商品吧 ✨</p>
+            <h3 className="text-xl font-bold text-gray-400 mb-3">购物车还是空的</h3>
+            <p className="text-gray-400 text-base font-medium">快对小P说出您想买的商品吧 ✨</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl p-3 shadow-sm">
