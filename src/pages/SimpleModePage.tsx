@@ -153,7 +153,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         {
           id: 'welcome',
           role: 'ai',
-          content: '快对小P说您想买的商品吧。',
+          content: '对小P说想买的商品吧。',
           type: 'text',
           timestamp: new Date(),
           isRead: true, // Welcome message is read by default
@@ -1110,8 +1110,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
 
         {cartItems.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center px-6 text-center bg-gray-50/50">
-            <h3 className="text-xl font-bold text-gray-400 mb-3">购物车还是空的</h3>
-            <p className="text-gray-400 text-base font-medium">快对小P说出您想买的商品吧 ✨</p>
+            <p className="text-gray-400 text-2xl font-bold leading-relaxed">对小P说出想买的商品吧 ✨</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl p-3 shadow-sm">
