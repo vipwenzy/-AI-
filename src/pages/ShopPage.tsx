@@ -47,10 +47,6 @@ export default function ShopPage() {
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-xl font-bold text-gray-900 mb-1">广州兴盛批发部</h1>
-            <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
-              <Phone size={12} />
-              <span>13928728301 (周总)</span>
-            </div>
             <div className="flex items-start gap-1 text-xs text-gray-500 leading-tight">
               <MapPin size={12} className="shrink-0 mt-0.5" />
               <span className="line-clamp-2">中国 广东省 广州市 番禺区 沙头街银平三街8号金年华B5栋一楼中检</span>
