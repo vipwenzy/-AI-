@@ -648,6 +648,51 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         }
       });
 
+      // If no direct actions were taken, try to find similar products
+      if (actions.length === 0 && !isRemove && !isModify) {
+        // Extract potential product keywords (excluding common intent words)
+        const keywords = text.replace(/有|没有|吗|想买|来|个|件|条|只|颗|枚|对|箱/g, ' ').trim().split(/\s+/).filter(k => k.length >= 1);
+        
+        let similarProducts: Product[] = [];
+        
+        for (const kw of keywords) {
+          if (kw.length < 1) continue;
+          
+          // Search by category
+          const categoryMatches = MOCK_PRODUCTS.filter(p => p.category.includes(kw));
+          similarProducts = [...similarProducts, ...categoryMatches];
+          
+          // Search by name parts
+          const nameMatches = MOCK_PRODUCTS.filter(p => p.name.includes(kw));
+          similarProducts = [...similarProducts, ...nameMatches];
+        }
+        
+        // Remove duplicates and limit results
+        const uniqueSimilarIds = Array.from(new Set(similarProducts.map(p => p.id)));
+        const uniqueSimilar = uniqueSimilarIds
+          .map(id => MOCK_PRODUCTS.find(p => p.id === id)!)
+          .slice(0, 6);
+          
+        if (uniqueSimilar.length > 0) {
+          const newAiMsg: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'ai',
+            content: `抱歉，没有找到“${text}”，为您推荐以下相似商品：`,
+            type: 'recommendation',
+            recommendations: {
+              title: "相似推荐",
+              products: uniqueSimilar
+            },
+            timestamp: new Date(),
+            isRead: showChatPopup
+          };
+
+          setChatHistory(prev => [...prev, newAiMsg]);
+          finishProcessing();
+          return;
+        }
+      }
+
       let aiResponse = actions.length > 0 ? actions.join('，') + '。' : '抱歉，我没有听清您需要的商品，请再说一遍。';
 
       const newAiMsg: ChatMessage = {
@@ -1060,7 +1105,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
       </div>
 
       {/* Cart Area (Always visible) */}
-      <div className="flex-1 overflow-y-auto p-4 pb-4">
+      <div className="flex-1 overflow-y-auto p-4 pb-4 flex flex-col">
         {cartItems.length > 0 && (
           <div className="flex items-center justify-between mb-3 px-1">
             <span className="text-sm text-gray-500">共 {cartItems.length} 件商品</span>
@@ -1109,7 +1154,7 @@ export default function SimpleModePage({ onSwitchMode }: SimpleModePageProps) {
         )}
 
         {cartItems.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center px-6 text-center bg-gray-50/50">
+          <div className="flex-1 flex flex-col items-center justify-center px-6 text-center bg-gray-50/50 rounded-2xl">
             <p className="text-gray-400 text-2xl font-bold leading-relaxed">对小P说出想买的商品吧 ✨</p>
           </div>
         ) : (
